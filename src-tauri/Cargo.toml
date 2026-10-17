@@ -1,6 +1,6 @@
 [package]
 name = "hello-print"
-version = "0.1.14"
+version = "0.1.15"
 description = "Automated photo printing workflows for makers"
 authors = ["Jake Klassen <jklassendev@gmail.com>"]
 edition = "2021"
