@@ -11,7 +11,7 @@ Hello Print is a Tauri v2 desktop application that automates photo printing work
 - **Frontend:** React 19, TypeScript, Vite 7, Tailwind CSS, shadcn/ui
 - **Backend:** Rust (Tauri v2)
 - **Package Manager:** pnpm
-- **Required Toolchain:** Node 24.13.1, Rust 1.93.1, pnpm 10.30.1 (see `mise.toml`)
+- **Required Toolchain:** Node 26.12.0, Rust 1.99.1, pnpm 12.14.0 (see `mise.toml`)
 - **Platforms:** Windows (primary), macOS (secondary)
 
 ## Commands
