@@ -3,6 +3,7 @@
   "rules": {
     "lightness-notation": null,
     "hue-degree-notation": null,
-    "property-no-vendor-prefix": null
+    "property-no-vendor-prefix": null,
+    "at-rule-prelude-no-invalid": [true, { "ignoreAtRules": ["apply"] }]
   }
 }
