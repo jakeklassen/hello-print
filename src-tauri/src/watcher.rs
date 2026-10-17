@@ -672,6 +672,24 @@ public static class DevModeApplier {{
 try {{
     Add-Type -AssemblyName System.Drawing
 
+    Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class PageGeometry {{
+    [DllImport("gdi32.dll")]
+    static extern int GetDeviceCaps(IntPtr hdc, int index);
+
+    // PHYSICALWIDTH, PHYSICALHEIGHT, PHYSICALOFFSETX, PHYSICALOFFSETY, LOGPIXELSX, LOGPIXELSY
+    public static int[] Read(IntPtr hdc) {{
+        int[] idx = {{ 110, 111, 112, 113, 88, 90 }};
+        int[] r = new int[idx.Length];
+        for (int i = 0; i < idx.Length; i++) r[i] = GetDeviceCaps(hdc, idx[i]);
+        return r;
+    }}
+}}
+"@
+
     $printerName = '{printer_name}'
     $filePath = '{file_path}'
 
@@ -683,9 +701,21 @@ try {{
 {settings_block}
     $pd.add_PrintPage({{
         param($sender, $e)
-        # Draw the image to fill the entire page (no scaling logic — the
-        # paper size and margins are already set by the DEVMODE / Print Ticket)
-        $dest = New-Object System.Drawing.RectangleF(0, 0, $e.PageBounds.Width, $e.PageBounds.Height)
+        # Draw the image at the paper's size (no scaling logic — the paper size
+        # and margins are already set by the DEVMODE / Print Ticket), centred on
+        # the physical page. Some borderless modes (Epson "Retain Size") report a
+        # page larger than the paper with the paper in the middle; drawing at
+        # (0, 0) shifted those prints up and left. Graphics units are 1/100 inch
+        # with the origin at the printable area, so subtract the physical offset.
+        # When the page equals the paper this is the paper's own corner.
+        $x = 0; $y = 0
+        $hdc = $e.Graphics.GetHdc()
+        try {{ $caps = [PageGeometry]::Read($hdc) }} finally {{ $e.Graphics.ReleaseHdc($hdc) }}
+        if ($caps[4] -gt 0 -and $caps[5] -gt 0) {{
+            $x = ($caps[0] / $caps[4] * 100 - $e.PageBounds.Width) / 2 - $caps[2] / $caps[4] * 100
+            $y = ($caps[1] / $caps[5] * 100 - $e.PageBounds.Height) / 2 - $caps[3] / $caps[5] * 100
+        }}
+        $dest = New-Object System.Drawing.RectangleF([single]$x, [single]$y, $e.PageBounds.Width, $e.PageBounds.Height)
         $e.Graphics.DrawImage($image, $dest)
         $e.HasMorePages = $false
     }})
