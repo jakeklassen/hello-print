@@ -77,6 +77,11 @@ mod windows_impl {
 
     const CREATE_NO_WINDOW: u32 = 0x08000000;
 
+    #[link(name = "user32")]
+    extern "system" {
+        fn EnableWindow(hwnd: isize, enable: i32) -> i32;
+    }
+
     /// Runs a PowerShell script from a temp file and returns (stdout, stderr).
     fn run_powershell(script: &str, label: &str) -> Result<(String, String), String> {
         let script_path = std::env::temp_dir().join(format!(
@@ -148,10 +153,15 @@ public static class PrinterDialog {
     ///
     /// Pre-filling is best effort: on any failure the dialog opens with the
     /// printer's defaults.
+    ///
+    /// The dialog is owned by `owner_hwnd` (the app window, 0 for none) so it
+    /// opens in front of the app rather than behind it. Blocks until the
+    /// dialog closes, so never call it on the main thread.
     pub fn open_printer_dialog(
         printer_id: &str,
         paper_size_keyword: Option<&str>,
         seed_devmode_base64: Option<&str>,
+        owner_hwnd: isize,
     ) -> Result<String, String> {
         let (width_um, height_um) = paper_size_keyword
             .and_then(paper_size_mm)
@@ -166,6 +176,7 @@ try {{
     $seedB64 = '{seed}'
     $sizeWidthUm = {width_um}
     $sizeHeightUm = {height_um}
+    $ownerHwnd = [IntPtr]::new([long]{owner_hwnd})
 
     $hPrinter = [IntPtr]::Zero
     if (-not [PrinterDialog]::OpenPrinter($printerName, [ref]$hPrinter, [IntPtr]::Zero)) {{
@@ -280,7 +291,7 @@ try {{
                 }}
             }}
 
-            $ret = [PrinterDialog]::DocumentProperties([IntPtr]::Zero, $hPrinter, $printerName, $pDevMode, $pDevMode,
+            $ret = [PrinterDialog]::DocumentProperties($ownerHwnd, $hPrinter, $printerName, $pDevMode, $pDevMode,
                 [PrinterDialog]::DM_IN_BUFFER -bor [PrinterDialog]::DM_IN_PROMPT -bor [PrinterDialog]::DM_OUT_BUFFER)
 
             if ($ret -ne [PrinterDialog]::IDOK) {{
@@ -307,15 +318,39 @@ try {{
             seed = seed_devmode_base64.unwrap_or("").replace('\'', ""),
             width_um = width_um,
             height_um = height_um,
+            owner_hwnd = owner_hwnd,
         );
 
-        let (stdout, stderr) = run_powershell(&script, "dialog")?;
+        log::info!(
+            "Opening printer dialog: printer={}, keyword={:?}, seeded={}",
+            printer_id,
+            paper_size_keyword,
+            seed_devmode_base64.is_some()
+        );
+        let started = std::time::Instant::now();
+        let result = run_powershell(&script, "dialog");
+
+        // A modal driver dialog disables its owner until it closes. If the
+        // PowerShell process died with the dialog open, the app window would
+        // stay disabled, so always re-enable it.
+        if owner_hwnd != 0 {
+            unsafe {
+                EnableWindow(owner_hwnd, 1);
+            }
+        }
+
+        let (stdout, stderr) = result?;
+        log::info!(
+            "Printer dialog closed after {:.1}s",
+            started.elapsed().as_secs_f64()
+        );
 
         if !stderr.is_empty() {
-            eprintln!("[HelloPrint] Printer dialog stderr: {}", stderr);
+            log::warn!("Printer dialog stderr: {}", stderr);
         }
 
         if stdout.lines().any(|l| l.trim() == "CANCELLED") {
+            log::info!("Printer dialog cancelled");
             return Err("User cancelled the dialog".to_string());
         }
 
@@ -325,6 +360,12 @@ try {{
         {
             return Ok(b64.to_string());
         }
+
+        log::error!(
+            "Printer dialog failed: stdout={}, stderr={}",
+            stdout,
+            stderr
+        );
 
         Err(format!(
             "Printer dialog failed: {}",

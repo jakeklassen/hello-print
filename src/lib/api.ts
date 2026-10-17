@@ -51,6 +51,9 @@ export const reprintJob = (id: string) => invoke<void>("reprint_job", { id });
 // Platform
 export const getPlatform = () => invoke<string>("get_platform");
 
+// Opens the app's log folder in the file manager
+export const openLogFolder = () => invoke<void>("open_log_folder");
+
 // Printer dialog (Windows only). Starts from seedDevmodeBase64 when given,
 // otherwise from the printer defaults pre-filled for the paper size.
 export const openPrinterDialog = (
