@@ -5,6 +5,22 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Hello Print</title>
+    <script>
+      // Apply the saved theme before the first paint (ThemeProvider only runs
+      // after React renders). Mirrors theme-provider.tsx.
+      (function () {
+        var theme = "system";
+        try {
+          theme = localStorage.getItem("helloprint-theme") || "system";
+        } catch (e) {}
+        if (theme === "system") {
+          theme = matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light";
+        }
+        document.documentElement.classList.add(theme);
+      })();
+    </script>
   </head>
 
   <body>

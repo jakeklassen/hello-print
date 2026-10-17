@@ -12,6 +12,7 @@ mod watcher;
 use jobs::JobQueueState;
 use std::sync::Arc;
 use storage::StorageState;
+use tauri::window::Color;
 use tauri::Manager;
 use tauri_plugin_log::{RotationStrategy, Target, TargetKind, TimezoneStrategy};
 use watcher::WatcherState;
@@ -63,22 +64,14 @@ pub fn run() {
             let main_window = app.get_webview_window("main").unwrap();
             let window_for_close = main_window.clone();
 
-            // The window starts hidden and the frontend shows it once it has
-            // rendered. Show it anyway if that never happens (e.g. the
-            // frontend failed to load), so the app never looks dead. Stop
-            // watching as soon as it has been visible once: after that a
-            // hidden window means the user closed it to the tray.
-            let window_for_fallback = main_window.clone();
-            std::thread::spawn(move || {
-                for _ in 0..50 {
-                    if window_for_fallback.is_visible().unwrap_or(true) {
-                        return;
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                }
-                log::warn!("Frontend did not show the window; showing it");
-                let _ = window_for_fallback.show();
-            });
+            // Paint the window and webview in the theme's background colour
+            // (--background in App.css) until the page loads, instead of the
+            // webview's default white.
+            let background = match main_window.theme() {
+                Ok(tauri::Theme::Dark) => Color(10, 10, 10, 255),
+                _ => Color(255, 255, 255, 255),
+            };
+            let _ = main_window.set_background_color(Some(background));
             main_window.on_window_event(move |event| {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     let minimize = storage_for_close
