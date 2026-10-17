@@ -15,6 +15,14 @@ import { Switch } from "@/components/ui/switch";
 import { PrinterSelector } from "@/components/printer-selector";
 import { CapabilitiesForm } from "@/components/capabilities-form";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   checkExpansion,
   configureMacosPrinter,
   getPlatform,
@@ -115,6 +123,7 @@ export function PresetForm({ preset, onSave, onCancel }: PresetFormProps) {
     "idle" | "sending" | "sent"
   >("idle");
   const [testPrintError, setTestPrintError] = useState<string | null>(null);
+  const [confirmTestPrint, setConfirmTestPrint] = useState(false);
 
   useEffect(() => {
     getPlatform().then(setPlatform);
@@ -398,13 +407,43 @@ export function PresetForm({ preset, onSave, onCancel }: PresetFormProps) {
                 dialogLoading ||
                 testPrintStatus === "sending"
               }
-              onClick={handleTestPrint}
+              onClick={() => setConfirmTestPrint(true)}
             >
               <Printer className="mr-2 h-4 w-4" />
               {testPrintStatus === "sending"
                 ? "Sending test sheet..."
                 : "Print Test Sheet"}
             </Button>
+            <Dialog open={confirmTestPrint} onOpenChange={setConfirmTestPrint}>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>Print a test sheet?</DialogTitle>
+                  <DialogDescription>
+                    This prints one {paperSizeKeyword} sheet on {printerId} with
+                    the current settings. Load paper before printing.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setConfirmTestPrint(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setConfirmTestPrint(false);
+                      handleTestPrint();
+                    }}
+                  >
+                    <Printer className="mr-2 h-4 w-4" />
+                    Print
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
             {testPrintStatus === "sent" && (
               <span className="text-xs text-muted-foreground">
                 Sent. Measure the centre square: it should be exactly 50 &times;
