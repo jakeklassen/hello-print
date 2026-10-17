@@ -6,6 +6,9 @@ use crate::jobs::{JobQueueState, JobStatus, PrintJob};
 #[cfg(target_os = "macos")]
 use crate::macos_printing::{self, MacOSPrintConfiguration};
 use crate::models::{AppConfig, Preset};
+#[cfg(target_os = "windows")]
+use crate::printer_setup;
+use crate::printer_setup::ExpansionCheck;
 use crate::printing::{self, PrinterCapabilities, PrinterInfo};
 use crate::storage::StorageState;
 use crate::watcher::{self, WatcherState, WatcherStatus};
@@ -21,148 +24,80 @@ pub fn get_platform() -> String {
     }
 }
 
+/// Opens the printer driver's settings dialog and returns the DEVMODE as
+/// base64. Starts from `seed_devmode_base64` when given (editing a preset's
+/// saved settings), otherwise from the printer's defaults pre-filled with the
+/// keyword's paper size, borderless and portrait.
 #[cfg(target_os = "windows")]
 #[tauri::command]
-pub fn open_printer_dialog(printer_id: String) -> Result<String, String> {
-    use std::os::windows::process::CommandExt;
-    use std::process::Command;
-
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-    let printer_escaped = printer_id.replace('\'', "''");
-
-    let script = format!(
-        r#"$ErrorActionPreference = 'Stop'
-try {{
-    Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-
-public static class PrinterDialog {{
-    [DllImport("winspool.drv", CharSet = CharSet.Unicode, SetLastError = true)]
-    public static extern bool OpenPrinter(string pPrinterName, out IntPtr phPrinter, IntPtr pDefault);
-
-    [DllImport("winspool.drv", CharSet = CharSet.Unicode, SetLastError = true)]
-    public static extern int DocumentProperties(
-        IntPtr hWnd, IntPtr hPrinter, string pDeviceName,
-        IntPtr pDevModeOutput, IntPtr pDevModeInput, int fMode);
-
-    [DllImport("winspool.drv", SetLastError = true)]
-    public static extern bool ClosePrinter(IntPtr hPrinter);
-
-    // fMode flags
-    public const int DM_IN_BUFFER  = 8;
-    public const int DM_IN_PROMPT  = 4;
-    public const int DM_OUT_BUFFER = 2;
-    // IDOK
-    public const int IDOK = 1;
-}}
-"@
-
-    $printerName = '{printer_name}'
-
-    # Open printer handle
-    $hPrinter = [IntPtr]::Zero
-    if (-not [PrinterDialog]::OpenPrinter($printerName, [ref]$hPrinter, [IntPtr]::Zero)) {{
-        throw "OpenPrinter failed for '$printerName' (error $([System.Runtime.InteropServices.Marshal]::GetLastWin32Error()))"
-    }}
-
-    try {{
-        # Get required DEVMODE size
-        $cbNeeded = [PrinterDialog]::DocumentProperties(
-            [IntPtr]::Zero, $hPrinter, $printerName,
-            [IntPtr]::Zero, [IntPtr]::Zero, 0)
-        if ($cbNeeded -le 0) {{
-            throw "DocumentProperties size query failed"
-        }}
-
-        # Allocate DEVMODE buffer
-        $pDevMode = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($cbNeeded)
-
-        try {{
-            # Get default DEVMODE first
-            $ret = [PrinterDialog]::DocumentProperties(
-                [IntPtr]::Zero, $hPrinter, $printerName,
-                $pDevMode, [IntPtr]::Zero,
-                [PrinterDialog]::DM_OUT_BUFFER)
-
-            # Show the dialog with current defaults as input
-            $ret = [PrinterDialog]::DocumentProperties(
-                [IntPtr]::Zero, $hPrinter, $printerName,
-                $pDevMode, $pDevMode,
-                [PrinterDialog]::DM_IN_BUFFER -bor [PrinterDialog]::DM_IN_PROMPT -bor [PrinterDialog]::DM_OUT_BUFFER)
-
-            if ($ret -ne [PrinterDialog]::IDOK) {{
-                Write-Output "CANCELLED"
-                exit 0
-            }}
-
-            # Copy DEVMODE bytes
-            $devModeBytes = New-Object byte[] $cbNeeded
-            [System.Runtime.InteropServices.Marshal]::Copy($pDevMode, $devModeBytes, 0, $cbNeeded)
-
-            # Output as base64
-            $b64 = [System.Convert]::ToBase64String($devModeBytes)
-            Write-Output "DEVMODE:$b64"
-        }} finally {{
-            [System.Runtime.InteropServices.Marshal]::FreeHGlobal($pDevMode)
-        }}
-    }} finally {{
-        [void][PrinterDialog]::ClosePrinter($hPrinter)
-    }}
-}} catch {{
-    Write-Error "DIALOG_ERROR: $($_.Exception.Message)"
-    exit 1
-}}
-"#,
-        printer_name = printer_escaped,
-    );
-
-    let script_path = std::env::temp_dir().join(format!(
-        "helloprint_dialog_{}.ps1",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis()
-    ));
-    std::fs::write(&script_path, &script)
-        .map_err(|e| format!("Failed to write dialog script: {}", e))?;
-
-    let output = Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            &script_path.display().to_string(),
-        ])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| format!("Failed to launch powershell: {}", e))?;
-
-    std::fs::remove_file(&script_path).ok();
-
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-
-    if stdout == "CANCELLED" {
-        return Err("User cancelled the dialog".to_string());
-    }
-
-    if let Some(b64) = stdout.strip_prefix("DEVMODE:") {
-        return Ok(b64.to_string());
-    }
-
-    Err(format!(
-        "Printer dialog failed: {}",
-        if !stderr.is_empty() { &stderr } else { &stdout }
-    ))
+pub fn open_printer_dialog(
+    printer_id: String,
+    paper_size_keyword: Option<String>,
+    seed_devmode_base64: Option<String>,
+) -> Result<String, String> {
+    printer_setup::open_printer_dialog(
+        &printer_id,
+        paper_size_keyword.as_deref(),
+        seed_devmode_base64.as_deref(),
+    )
 }
 
 #[cfg(not(target_os = "windows"))]
 #[tauri::command]
-pub fn open_printer_dialog(_printer_id: String) -> Result<String, String> {
+pub fn open_printer_dialog(
+    _printer_id: String,
+    _paper_size_keyword: Option<String>,
+    _seed_devmode_base64: Option<String>,
+) -> Result<String, String> {
     Err("Printer dialog is only available on Windows".to_string())
+}
+
+/// Checks captured printer settings for borderless expansion without printing.
+#[cfg(target_os = "windows")]
+#[tauri::command]
+pub async fn check_expansion(
+    printer_id: String,
+    devmode_base64: String,
+) -> Result<ExpansionCheck, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        printer_setup::check_expansion(&printer_id, &devmode_base64)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[cfg(not(target_os = "windows"))]
+#[tauri::command]
+pub async fn check_expansion(
+    _printer_id: String,
+    _devmode_base64: String,
+) -> Result<ExpansionCheck, String> {
+    Err("Expansion check is only available on Windows".to_string())
+}
+
+/// Prints a 50 mm measurement sheet with the given (possibly unsaved) settings.
+#[cfg(target_os = "windows")]
+#[tauri::command]
+pub async fn print_test_sheet(
+    printer_id: String,
+    paper_size_keyword: String,
+    devmode_base64: Option<String>,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        printer_setup::print_test_sheet(&printer_id, &paper_size_keyword, devmode_base64.as_deref())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[cfg(not(target_os = "windows"))]
+#[tauri::command]
+pub async fn print_test_sheet(
+    _printer_id: String,
+    _paper_size_keyword: String,
+    _devmode_base64: Option<String>,
+) -> Result<(), String> {
+    Err("Test sheet printing is only available on Windows".to_string())
 }
 
 #[tauri::command]

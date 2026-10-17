@@ -14,6 +14,31 @@ const KEYWORDS: &[(&str, &str)] = &[
     ("a6", "a6"),
 ];
 
+/// Portrait paper dimensions in millimetres for each canonical size.
+const PAPER_SIZES_MM: &[(&str, f64, f64)] = &[
+    ("4x6", 101.6, 152.4),
+    ("5x7", 127.0, 177.8),
+    ("8x10", 203.2, 254.0),
+    ("8.5x11", 215.9, 279.4),
+    ("a4", 210.0, 297.0),
+    ("a5", 148.0, 210.0),
+    ("a6", 105.0, 148.0),
+];
+
+/// Portrait (width, height) in millimetres for a preset's paper size keyword,
+/// accepting aliases (e.g. "letter", "4R"). Returns None for unknown keywords.
+pub fn paper_size_mm(keyword: &str) -> Option<(f64, f64)> {
+    let lower = keyword.trim().to_lowercase();
+    let canonical = KEYWORDS
+        .iter()
+        .find(|(k, _)| *k == lower)
+        .map(|(_, c)| *c)?;
+    PAPER_SIZES_MM
+        .iter()
+        .find(|(name, _, _)| *name == canonical)
+        .map(|(_, w, h)| (*w, *h))
+}
+
 /// Delimiter characters that separate tokens in filenames.
 fn is_delimiter(c: char) -> bool {
     matches!(c, ' ' | '_' | '-' | '.')
@@ -117,6 +142,16 @@ mod tests {
             parse_size_keyword("photo_4x6_A4.jpg"),
             Some("4x6".to_string())
         );
+    }
+
+    #[test]
+    fn test_paper_size_mm() {
+        assert_eq!(paper_size_mm("4x6"), Some((101.6, 152.4)));
+        assert_eq!(paper_size_mm(" 4R "), Some((101.6, 152.4)));
+        assert_eq!(paper_size_mm("Letter"), Some((215.9, 279.4)));
+        assert_eq!(paper_size_mm("8.5x11"), Some((215.9, 279.4)));
+        assert_eq!(paper_size_mm("A6"), Some((105.0, 148.0)));
+        assert_eq!(paper_size_mm("poster"), None);
     }
 
     #[test]

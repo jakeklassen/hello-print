@@ -32,6 +32,19 @@ export interface Preset {
   updated_at: string;
 }
 
+export type ExpansionStatus = "no_expansion_detected" | "expanding" | "unknown";
+
+/** Result of checking captured Windows printer settings for borderless expansion. */
+export interface ExpansionCheck {
+  status: ExpansionStatus;
+  logical_dpi: number;
+  print_quality_dpi: number | null;
+  /** logical ÷ print quality, e.g. 1.0528 for a 5.3% enlargement */
+  factor: number | null;
+  page_mm: [number, number] | null;
+  paper_mm: [number, number] | null;
+}
+
 export interface MacOSPrintConfiguration {
   printer_name: string;
   print_info_base64: string;
