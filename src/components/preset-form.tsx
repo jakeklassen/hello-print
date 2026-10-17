@@ -145,6 +145,9 @@ export function PresetForm({ preset, onSave, onCancel }: PresetFormProps) {
   const platformLoaded = platform !== null;
   const isWindows = platform === "windows";
   const isMacos = platform === "macos";
+  // Without captured driver settings a Windows preset prints with whatever the
+  // printer defaults are, which is rarely true size.
+  const needsWindowsConfig = isWindows && !devmodeBase64;
   const hasMacosNativeConfig = Boolean(
     macosPrintInfoBase64 &&
     macosPageFormatBase64 &&
@@ -257,6 +260,10 @@ export function PresetForm({ preset, onSave, onCancel }: PresetFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (needsWindowsConfig) {
+      return;
+    }
 
     if (isMacos && !hasMacosNativeConfig) {
       setMacosConfigError(
@@ -538,11 +545,16 @@ export function PresetForm({ preset, onSave, onCancel }: PresetFormProps) {
         <Label htmlFor="auto-print">Auto-print (no confirmation)</Label>
       </div>
 
-      <div className="flex justify-end gap-2">
+      <div className="flex items-center justify-end gap-2">
+        {needsWindowsConfig && (
+          <p className="mr-auto text-xs text-muted-foreground">
+            Configure printer settings to save this preset.
+          </p>
+        )}
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit">
+        <Button type="submit" disabled={needsWindowsConfig}>
           {preset ? "Save Changes" : "Create Preset"}
         </Button>
       </div>
