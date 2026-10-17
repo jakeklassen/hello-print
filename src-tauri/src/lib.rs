@@ -62,6 +62,18 @@ pub fn run() {
             let storage_for_close = storage.clone();
             let main_window = app.get_webview_window("main").unwrap();
             let window_for_close = main_window.clone();
+
+            // The window starts hidden and the frontend shows it once it has
+            // rendered. Show it anyway if that never happens (e.g. the
+            // frontend failed to load), so the app never looks dead.
+            let window_for_fallback = main_window.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(5));
+                if !window_for_fallback.is_visible().unwrap_or(true) {
+                    log::warn!("Frontend did not show the window; showing it");
+                    let _ = window_for_fallback.show();
+                }
+            });
             main_window.on_window_event(move |event| {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     let minimize = storage_for_close
