@@ -1,11 +1,12 @@
 # Spike: generate the 4x6 measurement sheets (300 dpi, 1200 x 1800 px).
 #
-#   A - centre: a 50 x 50 mm square dead centre plus a 140 mm line. Measures size.
-#   B - edges:  coloured background, a frame on the image edge, 20 mm squares in
-#               every corner, and 0-10 mm rulers on each edge. Shows clipping (lost
+#   A - centre: a 50 x 50 mm outlined square dead centre plus a 140 mm line. Measures size.
+#   B - edges:  a light 3 mm band and a frame on the image edge, outlined 20 mm
+#               squares in every corner, and 0-10 mm rulers on each edge. Shows clipping (lost
 #               ticks / frame) vs. shift (white strip) per edge.
 #
-# Every dimension is rounded to whole pixels (mm * 300 / 25.4).
+# Outlines are drawn inside the shape, so outer edge to outer edge is exact.
+# Ink is kept to thin lines. Every dimension is rounded to whole pixels (mm * 300 / 25.4).
 #
 # Usage: powershell -NoProfile -ExecutionPolicy Bypass -File make-4x6-sheets.ps1 `
 #          -OutDir ..\..\..\tmp\spike\sheets [-Label "baseline Retain Size"]
@@ -38,21 +39,33 @@ $black = [System.Drawing.Brushes]::Black
 $font = New-Object System.Drawing.Font("Segoe UI", 7, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Point)
 $small = New-Object System.Drawing.Font("Segoe UI", 5, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Point)
 
-# --- Sheet A: centre square + 140 mm line -----------------------------------
-$bmp, $g = New-Sheet ([System.Drawing.Color]::White)
 
+# Outline drawn inside the box, so the outer edge measures exactly $size px.
+function Draw-Outline($g, $brush, [int]$x, [int]$y, [int]$w, [int]$h, [int]$stroke) {
+    $g.FillRectangle($brush, $x, $y, $w, $stroke)
+    $g.FillRectangle($brush, $x, $y + $h - $stroke, $w, $stroke)
+    $g.FillRectangle($brush, $x, $y, $stroke, $h)
+    $g.FillRectangle($brush, $x + $w - $stroke, $y, $stroke, $h)
+}
+
+$stroke = Px 0.5                         # 6
 $sq = Px 50                              # 591
 $x0 = [int][math]::Floor(($W - $sq) / 2) # 304
 $y0 = [int][math]::Floor(($H - $sq) / 2) # 604
-$g.FillRectangle($black, $x0, $y0, $sq, $sq)
-$g.DrawString("50 x 50 mm ($sq x $sq px)", $font, $black, $x0, $y0 + $sq + 12)
+$sqLabel = "50 x 50 mm outer edge to outer edge ($sq px)"
+
+# --- Sheet A: centre square + 140 mm line -----------------------------------
+$bmp, $g = New-Sheet ([System.Drawing.Color]::White)
+
+Draw-Outline $g $black $x0 $y0 $sq $sq $stroke
+$g.DrawString($sqLabel, $font, $black, $x0, $y0 + $sq + 12)
 
 $line = Px 140                           # 1654
 $ly = [int][math]::Floor(($H - $line) / 2)
-$g.FillRectangle($black, 150, $ly, 4, $line)
-$g.FillRectangle($black, 130, $ly, 44, 4)            # end caps mark the exact ends
-$g.FillRectangle($black, 130, $ly + $line - 4, 44, 4)
-$g.DrawString("140 mm ($line px)", $font, $black, 170, $ly + 20)
+$g.FillRectangle($black, 150, $ly, 3, $line)
+$g.FillRectangle($black, 130, $ly, 44, 3)            # end caps mark the exact ends
+$g.FillRectangle($black, 130, $ly + $line - 3, 44, 3)
+$g.DrawString("140 mm cap to cap ($line px)", $font, $black, 170, $ly + 20)
 
 $g.DrawString("Sheet A - centre - $Label - 4x6 @ 300 dpi", $small, $black, 330, 1500)
 $g.Dispose()
@@ -60,20 +73,22 @@ $bmp.Save((Join-Path $OutDir "spike-A-centre-50mm-4x6.png"), [System.Drawing.Ima
 $bmp.Dispose()
 
 # --- Sheet B: edges ----------------------------------------------------------
-$bmp, $g = New-Sheet ([System.Drawing.Color]::FromArgb(255, 190, 225, 245))
+$bmp, $g = New-Sheet ([System.Drawing.Color]::White)
 
-# Frame exactly on the image edge, 0.5 mm thick.
-$t = Px 0.5
-$g.FillRectangle($black, 0, 0, $W, $t)
-$g.FillRectangle($black, 0, $H - $t, $W, $t)
-$g.FillRectangle($black, 0, 0, $t, $H)
-$g.FillRectangle($black, $W - $t, 0, $t, $H)
+# A light 3 mm band along every edge makes unprinted (white) paper easy to spot,
+# with a 0.5 mm black frame exactly on the image edge.
+$tint = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 205, 230, 248))
+$band = Px 3
+$g.FillRectangle($tint, 0, 0, $W, $band)
+$g.FillRectangle($tint, 0, $H - $band, $W, $band)
+$g.FillRectangle($tint, 0, 0, $band, $H)
+$g.FillRectangle($tint, $W - $band, 0, $band, $H)
+Draw-Outline $g $black 0 0 $W $H $stroke
 
-# 20 mm squares in each corner, touching both edges.
+# Outlined 20 mm squares in each corner, sharing both edges with the frame.
 $corner = Px 20                          # 236
-$dark = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 30, 60, 110))
 foreach ($c in @(@(0, 0), @(($W - $corner), 0), @(0, ($H - $corner)), @(($W - $corner), ($H - $corner)))) {
-    $g.FillRectangle($dark, $c[0], $c[1], $corner, $corner)
+    Draw-Outline $g $black $c[0] $c[1] $corner $corner $stroke
 }
 
 # 0-10 mm rulers at the middle of each edge: tick every mm, long tick at 5 and 10.
@@ -91,8 +106,8 @@ $g.DrawString("R 1-10mm", $small, $black, $W - 160, $midY + 50)
 $g.DrawString("T 1-10mm", $small, $black, $midX + 50, 20)
 $g.DrawString("B 1-10mm", $small, $black, $midX + 50, $H - 70)
 
-$g.FillRectangle($black, $x0, $y0, $sq, $sq)
-$g.DrawString("centre 50 x 50 mm; corner squares 20 x 20 mm", $font, $black, $x0 - 120, $y0 + $sq + 12)
+Draw-Outline $g $black $x0 $y0 $sq $sq $stroke
+$g.DrawString("$sqLabel; corner squares 20 mm ($corner px)", $small, $black, $x0 - 60, $y0 + $sq + 12)
 $g.DrawString("Sheet B - edges - $Label - 4x6 @ 300 dpi", $small, $black, 330, 1450)
 $g.Dispose()
 $bmp.Save((Join-Path $OutDir "spike-B-edges-4x6.png"), [System.Drawing.Imaging.ImageFormat]::Png)
