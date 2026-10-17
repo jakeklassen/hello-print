@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useState } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AppSidebar, type View } from "@/components/app-sidebar";
@@ -19,15 +18,6 @@ const views: Record<View, React.ComponentType> = {
 function App() {
   const [activeView, setActiveView] = useState<View>("dashboard");
   const ActivePage = views[activeView];
-
-  // The window starts hidden (tauri.conf.json) so the webview's blank white
-  // background never shows. This runs after ThemeProvider has applied the
-  // theme; reveal the window on the next frame, once it has painted.
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      getCurrentWindow().show().catch(console.error);
-    });
-  }, []);
 
   return (
     <ThemeProvider defaultTheme="system">
