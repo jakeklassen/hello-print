@@ -7,6 +7,7 @@ import {
   Moon,
   Monitor,
 } from "lucide-react";
+import appIcon from "@/assets/app-icon.png";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -52,9 +53,12 @@ export function AppSidebar({
 
   return (
     <aside className="flex h-full w-14 flex-col items-center border-r bg-card py-3">
-      <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground text-xs font-bold">
-        PQ
-      </div>
+      <img
+        src={appIcon}
+        alt="Hello Print"
+        className="mb-2 h-8 w-8 rounded-md"
+        draggable={false}
+      />
       <Separator className="mb-2 w-8" />
       <nav className="flex flex-1 flex-col items-center gap-1">
         {navItems.map(({ id, label, icon: Icon }) => (
