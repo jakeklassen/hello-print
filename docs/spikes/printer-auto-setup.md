@@ -29,7 +29,7 @@ Evidence labels used throughout:
 
 ## 2. Headline answer
 
-**Windows, ET-8500: yes.** Hello Print can create a true-size borderless setup **with no driver dialog and no saved blob**, and verify it before printing.
+**Windows, ET-8500: yes, technically.** Hello Print can create a true-size borderless setup **with no driver dialog and no saved blob**, and verify it before printing. **Decision:** don't ship the byte patch for now. Ship a guided, pre-filled driver dialog with the same verification instead (section 6). It works for every printer, at a fraction of the maintenance.
 
 1. **Named settings.** Start from the queue's defaults and set size, borderless, paper source, paper type, quality, orientation and colour by name through a **Print Ticket**. The driver validates the choices and converts them into its own settings.
 2. **Retain Size.** Set the **Retain Size flag**, a single byte in Epson's private settings. This is guarded by driver version and blob size.
@@ -37,7 +37,7 @@ Evidence labels used throughout:
 
 The result is identical to the owner's hand-made Epson presets for 4x6 and Letter, apart from one unused field. 🔎 Printed and confirmed by the owner, with and without Retain Size. 🧑
 
-**Windows, other printers:** the named settings are generic, but expansion is not, because each vendor stores it privately. Use the driver dialog (today's "Configure Printer Settings"), plus the dpi check and the 50 mm test print.
+**Windows, other printers:** the named settings are generic, but expansion is not, because each vendor stores it privately. The same guided dialog, dpi check and 50 mm test print apply. First external test: an HP DeskJet 3632.
 
 **macOS:** not tested yet. The Epson driver's `EPIJ_exmg` option and CUPS `cupsBorderlessScalingFactor` (both already read by Hello Print) are the starting points.
 
@@ -119,78 +119,52 @@ IPP facts 🔎 (Get-Printer-Attributes over IPPS):
 - **Margins:** 0 or 3 mm.
 - **Missing:** `media-overprint`.
 
-## 6. Recommendation
+## 6. Recommendation (decided 2026-10-17)
 
-**ET-8500 family on Windows: automatic, no dialog.** The maker picks printer, paper size and paper type, and Hello Print:
+**Guided setup for every printer, verified by the dpi check. No per-model byte patching for now.**
 
-1. Builds the setup from named settings and sets the Retain Size byte, but only for a recognised driver layout.
-2. Verifies it: the options read back as requested, and the dpi check passes.
-3. Prints centred ([#26](https://github.com/jakeklassen/hello-print/issues/26)).
-4. Offers a 50 mm test print as a confidence check.
+Patching Retain Size works on the ET-8500, as shown above, but it only saves the maker one dialog step, once per preset. The cost is a model-and-driver-version registry that needs a capture diff, a test printer and a release for every new model and every Epson driver update. Its fallback would be the guided dialog anyway, so the guided flow has to exist regardless. The byte finding stays documented here as a possible later upgrade, worth it only if support data shows makers routinely getting stuck.
 
-If anything doesn't verify, it falls back to the driver dialog. It never prints a setup that is silently expanding.
+**The Windows flow:**
 
-**Other printers on Windows: no custom settings UI.** A hybrid of our own screen plus the vendor dialog adds nothing if the dialog is needed anyway.
+1. The maker picks printer and paper size.
+2. Hello Print opens the **driver dialog pre-filled** with the paper size, borderless and portrait. It uses only standard Print Ticket names, so it works on any Windows driver with no per-model knowledge.
+3. The maker sets the expansion option, guided by a short screenshot or video per brand (Epson: Borderless → Settings… → Retain Size; Canon: Amount of Extension → leftmost).
+4. On OK, Hello Print saves the setup and **immediately runs the dpi check**:
+   - ✅ **True size:** logical dpi = print-quality dpi.
+   - ⚠️ **"Enlarges prints by 5.3%":** logical dpi is higher. Reopen the dialog.
+   - ❔ **"Can't tell on this printer":** the driver reports quality as a code (negative `dmPrintQuality`, as some HP drivers do) or doesn't change dpi when expanding.
+5. An optional **50 mm test print** gives final confirmation, and is the only proof on a ❔ printer.
+6. Prints are centred on the sheet ([#26](https://github.com/jakeklassen/hello-print/issues/26)).
 
-- Keep **"Configure Printer Settings"**, which opens the driver dialog.
-- Add a short **per-brand video** showing where the expansion setting lives.
-- **Run the dpi check on the captured setup**, and warn when it reports expansion ("this setup enlarges prints by 5.3%").
-- Finish with the **50 mm test print**.
-- **Option:** where the dpi check reports expansion, Hello Print could pre-shrink the image by the same factor (the `scale_compensation` idea already in the app). This gives true size even with expansion on, at the cost of trimmed edges.
-
-**Where nothing works:** the guided dialog plus the 50 mm test print, and the maker measures. This is the existing flow.
+**Later, not now:**
+- A per-print re-check in the folder-watching pipeline.
+- Pre-shrinking images on printers that can only expand (the `scale_compensation` idea).
 
 **Templates:** with Retain Size, Epson warns of possible hairline white slivers from paper-feed tolerance. Designs that run to the edge should keep critical content more than ~0.5 mm inside it, and ideally include 1–2 mm of bleed.
 
-## 7. Proposed "printer profile"
+## 7. What a preset stores
 
-**Inputs:** printer (queue), paper size, paper type. Paper type defaults to Presentation Paper Matte.
+**Inputs:** printer (queue), paper size keyword.
 
-**Model registry**, shipped with Hello Print and keyed by driver identity:
-
-```jsonc
-{
-  "EPSON ET-8500 Series": [
-    {
-      "dmDriverVersion": "0x300",
-      "dmDriverExtra": 7972,
-      "retainSize": { "offset": 7942, "on": 1, "off": 0 },
-      "paperTypes": { "presentation-matte": "psk:Bond" },
-      "sizes": { "4x6": "ns0000:Fullsize4x6", "letter": "psk:NorthAmericaLetter" },
-      "source": "ns0000:AutoSheetFeeder",
-      "quality": "ns0000:HighQuality"
-    }
-  ]
-}
-```
-
-**What Hello Print stores per preset** (extends today's `Preset`):
+Each preset keeps today's fields, including the captured `devmode_base64`, plus the result of the check from when the setup was saved:
 
 ```jsonc
 {
   "printer_id": "ET-8500 Series(Network)",
-  "driver": { "name": "EPSON ET-8500 Series", "dmDriverVersion": "0x300", "dmDriverExtra": 7972 },
   "paper_size_keyword": "4x6",
-  "setup": { "method": "auto" },          // or "dialog" when captured from the driver dialog
-  "devmode_base64": "…",                    // the built (or captured) blob
-  "verified": {
-    "at": "2026-10-17T12:00:00Z",
+  "devmode_base64": "…",                       // captured from the pre-filled driver dialog
+  "expansion_check": {
+    "status": "true_size",                      // "true_size" | "expanding" | "unknown"
     "logical_dpi": 720, "print_quality_dpi": 720,
-    "page_mm": [106.96, 155.22], "paper_mm": [101.6, 152.4]
+    "factor": 1.0,                              // logical ÷ quality when expanding (e.g. 1.0528)
+    "page_mm": [106.96, 155.22], "paper_mm": [101.6, 152.4],
+    "checked_at": "2026-10-17T12:00:00Z"
   }
 }
 ```
 
-**How a supported model is recognised:** the queue's driver name (`Get-PrinterDriver`) plus the DEVMODE's `dmDriverVersion` and `dmDriverExtra`. All three must match a registry entry.
-
-**When the driver version is new or unknown** (Epson actively prompts users to update their software, which we saw during the spike):
-
-1. Build the named settings anyway; that part doesn't depend on version.
-2. Don't patch the byte.
-3. Fall back to the dialog for expansion, then run the dpi check.
-4. During development, record the new layout by repeating the two-capture diff (`capture-devmode.ps1` + `diff-devmode.mjs`), then add a registry entry.
-
-**Re-verify** on every app start, or before the first print after a driver change.
+No model registry: nothing is keyed by driver name or version.
 
 ## 8. Open risks
 
