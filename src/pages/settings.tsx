@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { check, type Update } from "@tauri-apps/plugin-updater";
-import { FolderOpen, Save, RefreshCw, Download, Check } from "lucide-react";
+import {
+  FolderOpen,
+  Save,
+  RefreshCw,
+  Download,
+  Check,
+  FileText,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,7 +27,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { getConfig, saveConfig, startWatcher, getPlatform } from "@/lib/api";
+import {
+  getConfig,
+  saveConfig,
+  startWatcher,
+  getPlatform,
+  openLogFolder,
+} from "@/lib/api";
 import { getVersion } from "@tauri-apps/api/app";
 import type { AppConfig, PostFileAction } from "@/lib/types";
 
@@ -331,6 +344,19 @@ export function SettingsPage() {
                 </Button>
               </div>
             )}
+          </div>
+          <Separator />
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-sm text-muted-foreground">
+              Having trouble? Send us the log files from this folder.
+            </p>
+            <Button
+              variant="outline"
+              onClick={() => openLogFolder().catch(console.error)}
+            >
+              <FileText className="mr-2 h-4 w-4" />
+              Open Logs Folder
+            </Button>
           </div>
         </CardContent>
       </Card>

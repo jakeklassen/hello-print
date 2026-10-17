@@ -152,7 +152,7 @@ pub fn start_watcher(
                 }
             }
             Err(e) => {
-                eprintln!("Watcher error: {}", e);
+                log::error!("Watcher error: {}", e);
                 if let Ok(mut status) = ws.status.lock() {
                     *status = WatcherStatus::Error;
                 }
@@ -232,7 +232,7 @@ fn handle_file(
     };
 
     if let Err(e) = result {
-        eprintln!("Error processing {}: {}", path.display(), e);
+        log::error!("Error processing {}: {}", path.display(), e);
         let _ = app.emit(
             "file-event",
             FileEvent {
@@ -371,7 +371,7 @@ fn handle_image(
                     }
                 }
                 Err(e) => {
-                    eprintln!("Print error for {}: {}", filename, e);
+                    log::error!("Print error for {}: {}", filename, e);
                     job_queue.update_status(job_id, JobStatus::Error, Some(e));
                     let _ = app.emit("job-updated", "");
                 }
@@ -458,8 +458,8 @@ pub(crate) fn submit_print_windows(
     fs::write(&script_path, &script_content)
         .map_err(|e| format!("Failed to write script: {}", e))?;
 
-    eprintln!(
-        "[HelloPrint] Submitting print job: printer={}, file={}",
+    log::info!(
+        "Submitting print job: printer={}, file={}",
         printer_id,
         file_path.display()
     );
@@ -483,11 +483,11 @@ pub(crate) fn submit_print_windows(
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
-    eprintln!("[HelloPrint] PS stdout: {}", stdout.trim());
+    log::info!("PS stdout: {}", stdout.trim());
     if !stderr.is_empty() {
-        eprintln!("[HelloPrint] PS stderr: {}", stderr.trim());
+        log::warn!("PS stderr: {}", stderr.trim());
     }
-    eprintln!("[HelloPrint] PS exit code: {:?}", output.status.code());
+    log::info!("PS exit code: {:?}", output.status.code());
 
     if stdout.contains("SUCCESS") {
         return Ok(());
@@ -770,8 +770,8 @@ fn submit_print_unix(file_path: &Path, printer_id: &str, preset: &Preset) -> Res
             }
             // Skip Resolution when vendor quality is set — it overrides quality
             if key == "Resolution" && has_vendor_quality {
-                eprintln!(
-                    "[HelloPrint] Skipping Resolution={} (EPIJ_Qual controls resolution)",
+                log::info!(
+                    "Skipping Resolution={} (EPIJ_Qual controls resolution)",
                     value
                 );
                 continue;
@@ -790,8 +790,8 @@ fn submit_print_unix(file_path: &Path, printer_id: &str, preset: &Preset) -> Res
         // Don't override EPIJ_OSColMat or EPIJ_CMat — the driver defaults work best
         // when submitting DeviceRGB content (it assumes sRGB input).
 
-        eprintln!(
-            "[HelloPrint] lpoptions -p {} {}",
+        log::info!(
+            "lpoptions -p {} {}",
             printer_id,
             opt_log
                 .iter()
@@ -805,7 +805,7 @@ fn submit_print_unix(file_path: &Path, printer_id: &str, preset: &Preset) -> Res
             .map_err(|e| format!("lpoptions failed: {}", e))?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            eprintln!("[HelloPrint] lpoptions stderr: {}", stderr.trim());
+            log::warn!("lpoptions stderr: {}", stderr.trim());
         }
     }
 
@@ -822,8 +822,8 @@ fn submit_print_unix(file_path: &Path, printer_id: &str, preset: &Preset) -> Res
     cmd.arg("-n").arg(preset.copies.to_string());
     cmd.arg(&pdf_path);
 
-    eprintln!(
-        "[HelloPrint] lp -d {} -n {} {}",
+    log::info!(
+        "lp -d {} -n {} {}",
         printer_id,
         preset.copies,
         pdf_path.display()
@@ -833,9 +833,9 @@ fn submit_print_unix(file_path: &Path, printer_id: &str, preset: &Preset) -> Res
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    eprintln!("[HelloPrint] lp stdout: {}", stdout.trim());
+    log::info!("lp stdout: {}", stdout.trim());
     if !stderr.is_empty() {
-        eprintln!("[HelloPrint] lp stderr: {}", stderr.trim());
+        log::warn!("lp stderr: {}", stderr.trim());
     }
 
     // Clean up temp PDF
@@ -904,8 +904,8 @@ fn wrap_image_in_pdf(
     let offset_x = (width_pt - img_width) / 2.0;
     let offset_y = (height_pt - img_height) / 2.0;
 
-    eprintln!(
-        "[HelloPrint] PDF: page={:.1}x{:.1} pt ({:.2}x{:.2} in) PageSize={}",
+    log::info!(
+        "PDF: page={:.1}x{:.1} pt ({:.2}x{:.2} in) PageSize={}",
         width_pt,
         height_pt,
         width_pt / 72.0,
@@ -913,8 +913,14 @@ fn wrap_image_in_pdf(
         page_size_key
     );
     if scaling_factor != 1.0 {
-        eprintln!("[HelloPrint] Scale compensation: factor={:.4}, image={:.1}x{:.1}, offset=({:.1},{:.1})",
-            scaling_factor, img_width, img_height, offset_x, offset_y);
+        log::info!(
+            "Scale compensation: factor={:.4}, image={:.1}x{:.1}, offset=({:.1},{:.1})",
+            scaling_factor,
+            img_width,
+            img_height,
+            offset_x,
+            offset_y
+        );
     }
 
     let image_bytes = fs::read(image_path).map_err(|e| format!("Failed to read image: {}", e))?;
@@ -922,12 +928,7 @@ fn wrap_image_in_pdf(
         .map_err(|e| format!("Failed to decode image: {}", e))?;
     let (img_w, img_h) = ::image::GenericImageView::dimensions(&img);
 
-    eprintln!(
-        "[HelloPrint] Image: {}x{} px, {} bytes",
-        img_w,
-        img_h,
-        image_bytes.len()
-    );
+    log::info!("Image: {}x{} px, {} bytes", img_w, img_h, image_bytes.len());
 
     let ext = image_path
         .extension()
@@ -936,7 +937,7 @@ fn wrap_image_in_pdf(
         .unwrap_or_default();
 
     let (stream_bytes, filter) = if ext == "jpg" || ext == "jpeg" {
-        eprintln!("[HelloPrint] JPEG passthrough: {} bytes", image_bytes.len());
+        log::info!("JPEG passthrough: {} bytes", image_bytes.len());
         (image_bytes, "DCTDecode")
     } else {
         let rgb = img.to_rgb8();
@@ -951,8 +952,8 @@ fn wrap_image_in_pdf(
             enc.finish()
                 .map_err(|e| format!("Compression error: {}", e))?
         };
-        eprintln!(
-            "[HelloPrint] FlateDecode: {} → {} bytes",
+        log::info!(
+            "FlateDecode: {} → {} bytes",
             raw_pixels.len(),
             compressed.len()
         );
@@ -1025,8 +1026,8 @@ fn wrap_image_in_pdf(
     doc.save(&pdf_path)
         .map_err(|e| format!("Failed to save PDF: {}", e))?;
 
-    eprintln!(
-        "[HelloPrint] Generated PDF: {} ({:.1} KB)",
+    log::info!(
+        "Generated PDF: {} ({:.1} KB)",
         pdf_path.display(),
         fs::metadata(&pdf_path)
             .map(|m| m.len() as f64 / 1024.0)
@@ -1058,7 +1059,7 @@ pub fn get_cups_scaling_factor(printer_id: &str, page_size_key: &str) -> f32 {
     let content = match fs::read_to_string(&ppd_path) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("[HelloPrint] Could not read PPD at {}: {}", ppd_path, e);
+            log::warn!("Could not read PPD at {}: {}", ppd_path, e);
             return 1.0;
         }
     };
@@ -1089,9 +1090,10 @@ pub fn get_cups_scaling_factor(printer_id: &str, page_size_key: &str) -> f32 {
                 .find(|c: char| !c.is_ascii_digit() && c != '.')
                 .unwrap_or(after.len());
             if let Ok(factor) = after[..end].parse::<f32>() {
-                eprintln!(
-                    "[HelloPrint] PPD cupsBorderlessScalingFactor for {}: {}",
-                    page_size_key, factor
+                log::info!(
+                    "PPD cupsBorderlessScalingFactor for {}: {}",
+                    page_size_key,
+                    factor
                 );
                 return factor;
             }
@@ -1101,8 +1103,8 @@ pub fn get_cups_scaling_factor(printer_id: &str, page_size_key: &str) -> f32 {
         break;
     }
 
-    eprintln!(
-        "[HelloPrint] No cupsBorderlessScalingFactor found for {} in PPD",
+    log::info!(
+        "No cupsBorderlessScalingFactor found for {} in PPD",
         page_size_key
     );
     1.0
@@ -1127,7 +1129,7 @@ pub fn get_cups_scaling_factor_by_keyword(printer_id: &str, keyword: &str) -> f3
     let content = match fs::read_to_string(&ppd_path) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("[HelloPrint] Could not read PPD at {}: {}", ppd_path, e);
+            log::warn!("Could not read PPD at {}: {}", ppd_path, e);
             return 1.0;
         }
     };
@@ -1171,17 +1173,18 @@ pub fn get_cups_scaling_factor_by_keyword(printer_id: &str, keyword: &str) -> f3
                 .find(|c: char| !c.is_ascii_digit() && c != '.')
                 .unwrap_or(after.len());
             if let Ok(factor) = after[..end].parse::<f32>() {
-                eprintln!(
-                    "[HelloPrint] PPD cupsBorderlessScalingFactor for keyword '{}': {}",
-                    keyword, factor
+                log::info!(
+                    "PPD cupsBorderlessScalingFactor for keyword '{}': {}",
+                    keyword,
+                    factor
                 );
                 return factor;
             }
         }
     }
 
-    eprintln!(
-        "[HelloPrint] No cupsBorderlessScalingFactor found for keyword '{}' in PPD",
+    log::info!(
+        "No cupsBorderlessScalingFactor found for keyword '{}' in PPD",
         keyword
     );
     1.0

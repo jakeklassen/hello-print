@@ -13,16 +13,39 @@ use jobs::JobQueueState;
 use std::sync::Arc;
 use storage::StorageState;
 use tauri::Manager;
+use tauri_plugin_log::{RotationStrategy, Target, TargetKind, TimezoneStrategy};
 use watcher::WatcherState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Logs go to the app log dir (on Windows
+        // %LOCALAPPDATA%\studio.hellomagnets.hello-print\logs) so testers can
+        // send them; Settings has a button that opens the folder.
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .targets([
+                    Target::new(TargetKind::Stdout),
+                    Target::new(TargetKind::LogDir { file_name: None }),
+                ])
+                .level(log::LevelFilter::Info)
+                .timezone_strategy(TimezoneStrategy::UseLocal)
+                .max_file_size(2_000_000)
+                .rotation_strategy(RotationStrategy::KeepSome(5))
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            log::info!(
+                "Hello Print {} starting on {} {}",
+                app.package_info().version,
+                std::env::consts::OS,
+                std::env::consts::ARCH
+            );
+
             let data_dir = app
                 .path()
                 .app_data_dir()
@@ -66,7 +89,7 @@ pub fn run() {
                 let jq = job_queue.clone();
                 std::thread::spawn(move || {
                     if let Err(e) = watcher::start_watcher(app_handle, folder, ws, ss, jq) {
-                        eprintln!("Failed to auto-start watcher: {}", e);
+                        log::error!("Failed to auto-start watcher: {}", e);
                     }
                 });
             }
@@ -93,6 +116,7 @@ pub fn run() {
             commands::retry_job,
             commands::reprint_job,
             commands::get_platform,
+            commands::open_log_folder,
             commands::open_printer_dialog,
             commands::check_expansion,
             commands::print_test_sheet,
