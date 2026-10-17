@@ -13,6 +13,19 @@ use crate::printing::{self, PrinterCapabilities, PrinterInfo};
 use crate::storage::StorageState;
 use crate::watcher::{self, WatcherState, WatcherStatus};
 
+/// Opens the folder holding the app's log files, for sending with a bug report.
+#[tauri::command]
+pub fn open_log_folder(app: AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    use tauri_plugin_opener::OpenerExt;
+
+    let dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    app.opener()
+        .open_path(dir.to_string_lossy(), None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn get_platform() -> String {
     if cfg!(target_os = "windows") {
@@ -28,23 +41,33 @@ pub fn get_platform() -> String {
 /// base64. Starts from `seed_devmode_base64` when given (editing a preset's
 /// saved settings), otherwise from the printer's defaults pre-filled with the
 /// keyword's paper size, borderless and portrait.
+///
+/// Async so the dialog never blocks the main thread: a sync command would
+/// freeze the app window until the dialog closed.
 #[cfg(target_os = "windows")]
 #[tauri::command]
-pub fn open_printer_dialog(
+pub async fn open_printer_dialog(
+    window: tauri::WebviewWindow,
     printer_id: String,
     paper_size_keyword: Option<String>,
     seed_devmode_base64: Option<String>,
 ) -> Result<String, String> {
-    printer_setup::open_printer_dialog(
-        &printer_id,
-        paper_size_keyword.as_deref(),
-        seed_devmode_base64.as_deref(),
-    )
+    let owner_hwnd = window.hwnd().map(|h| h.0 as isize).unwrap_or(0);
+    tauri::async_runtime::spawn_blocking(move || {
+        printer_setup::open_printer_dialog(
+            &printer_id,
+            paper_size_keyword.as_deref(),
+            seed_devmode_base64.as_deref(),
+            owner_hwnd,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[cfg(not(target_os = "windows"))]
 #[tauri::command]
-pub fn open_printer_dialog(
+pub async fn open_printer_dialog(
     _printer_id: String,
     _paper_size_keyword: Option<String>,
     _seed_devmode_base64: Option<String>,
