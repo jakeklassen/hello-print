@@ -431,7 +431,11 @@ fn submit_print_job(app: &AppHandle, file_path: &Path, preset: &Preset) -> Resul
 // ─── Windows printing ────────────────────────────────────────────────────────
 
 #[cfg(target_os = "windows")]
-fn submit_print_windows(file_path: &Path, printer_id: &str, preset: &Preset) -> Result<(), String> {
+pub(crate) fn submit_print_windows(
+    file_path: &Path,
+    printer_id: &str,
+    preset: &Preset,
+) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
     use std::process::Command;
 

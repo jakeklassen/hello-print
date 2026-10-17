@@ -3,6 +3,7 @@ mod jobs;
 mod macos_printing;
 mod models;
 mod parser;
+mod printer_setup;
 mod printing;
 mod storage;
 mod tray;
@@ -93,6 +94,8 @@ pub fn run() {
             commands::reprint_job,
             commands::get_platform,
             commands::open_printer_dialog,
+            commands::check_expansion,
+            commands::print_test_sheet,
             commands::configure_macos_printer,
             commands::get_borderless_scale_factor,
         ])

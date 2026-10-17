@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AppConfig,
+  ExpansionCheck,
   Preset,
   PrinterInfo,
   PrinterCapabilities,
@@ -50,9 +51,32 @@ export const reprintJob = (id: string) => invoke<void>("reprint_job", { id });
 // Platform
 export const getPlatform = () => invoke<string>("get_platform");
 
-// Printer dialog (Windows only)
-export const openPrinterDialog = (printerId: string) =>
-  invoke<string>("open_printer_dialog", { printerId });
+// Printer dialog (Windows only). Starts from seedDevmodeBase64 when given,
+// otherwise from the printer defaults pre-filled for the paper size.
+export const openPrinterDialog = (
+  printerId: string,
+  paperSizeKeyword: string | null,
+  seedDevmodeBase64: string | null,
+) =>
+  invoke<string>("open_printer_dialog", {
+    printerId,
+    paperSizeKeyword,
+    seedDevmodeBase64,
+  });
+
+export const checkExpansion = (printerId: string, devmodeBase64: string) =>
+  invoke<ExpansionCheck>("check_expansion", { printerId, devmodeBase64 });
+
+export const printTestSheet = (
+  printerId: string,
+  paperSizeKeyword: string,
+  devmodeBase64: string | null,
+) =>
+  invoke<void>("print_test_sheet", {
+    printerId,
+    paperSizeKeyword,
+    devmodeBase64,
+  });
 
 export const getBorderlessScaleFactor = (
   printerId: string,
