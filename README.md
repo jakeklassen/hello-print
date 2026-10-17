@@ -15,7 +15,7 @@ A cross-platform desktop application built with Tauri that automates photo print
 Install the required toolchain via [mise](https://mise.jdx.dev/) (`mise install`) or manually:
 
 - Node.js 26.3.0
-- Rust 1.93.1
+- Rust 1.99.1
 - pnpm 11.5.3
 
 ### Building on Linux / WSL
