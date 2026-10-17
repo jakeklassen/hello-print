@@ -65,14 +65,19 @@ pub fn run() {
 
             // The window starts hidden and the frontend shows it once it has
             // rendered. Show it anyway if that never happens (e.g. the
-            // frontend failed to load), so the app never looks dead.
+            // frontend failed to load), so the app never looks dead. Stop
+            // watching as soon as it has been visible once: after that a
+            // hidden window means the user closed it to the tray.
             let window_for_fallback = main_window.clone();
             std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_secs(5));
-                if !window_for_fallback.is_visible().unwrap_or(true) {
-                    log::warn!("Frontend did not show the window; showing it");
-                    let _ = window_for_fallback.show();
+                for _ in 0..50 {
+                    if window_for_fallback.is_visible().unwrap_or(true) {
+                        return;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(100));
                 }
+                log::warn!("Frontend did not show the window; showing it");
+                let _ = window_for_fallback.show();
             });
             main_window.on_window_event(move |event| {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
