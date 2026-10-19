@@ -29,13 +29,15 @@ import {
   deletePreset,
   getConfig,
   saveConfig,
+  listPrinters,
 } from "@/lib/api";
 import type { PresetFormData } from "@/components/preset-form";
-import type { AppConfig, Preset } from "@/lib/types";
+import type { AppConfig, Preset, PrinterInfo } from "@/lib/types";
 
 export function PresetsPage() {
   const [presets, setPresets] = useState<Preset[]>([]);
   const [config, setConfig] = useState<AppConfig | null>(null);
+  const [printers, setPrinters] = useState<PrinterInfo[]>([]);
   const [editingPreset, setEditingPreset] = useState<Preset | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
@@ -43,6 +45,10 @@ export function PresetsPage() {
     const [p, c] = await Promise.all([listPresets(), getConfig()]);
     setPresets(p);
     setConfig(c);
+    // Only used for the driver badges; the list still works without them.
+    listPrinters()
+      .then(setPrinters)
+      .catch(() => setPrinters([]));
   };
 
   useEffect(() => {
@@ -164,6 +170,7 @@ export function PresetsPage() {
         <div className="grid gap-3">
           {presets.map((preset) => {
             const isDefault = config?.default_preset_id === preset.id;
+            const printer = printers.find((p) => p.id === preset.printer_id);
             return (
               <Card key={preset.id}>
                 <CardHeader className="flex flex-row items-center justify-between py-3 px-4">
@@ -177,6 +184,7 @@ export function PresetsPage() {
                             Default
                           </Badge>
                         )}
+                        <DriverBadge printer={printer} />
                       </CardTitle>
                       <CardDescription className="text-xs mt-0.5">
                         {preset.printer_id ?? "No printer"} &middot; Keyword:{" "}
@@ -256,5 +264,36 @@ export function PresetsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// Windows only (macOS doesn't report drivers): whether the preset's printer
+// uses the manufacturer's driver or Windows' generic one, which can't stop
+// borderless prints being enlarged.
+function DriverBadge({ printer }: { printer: PrinterInfo | undefined }) {
+  if (!printer?.driver) {
+    return null;
+  }
+
+  if (printer.is_generic_driver) {
+    return (
+      <Badge
+        variant="outline"
+        className="border-amber-500/50 text-xs text-amber-700 dark:text-amber-400"
+        title={printer.driver}
+      >
+        Generic driver
+      </Badge>
+    );
+  }
+
+  return (
+    <Badge
+      variant="outline"
+      className="border-green-600/50 text-xs text-green-700 dark:text-green-400"
+      title={printer.driver}
+    >
+      Manufacturer driver
+    </Badge>
   );
 }
