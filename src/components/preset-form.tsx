@@ -637,6 +637,19 @@ function ExpansionNotice({
     );
   }
 
+  if (check.status === "printer_decides") {
+    return (
+      <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+        <CircleQuestionMark className="mt-px h-3.5 w-3.5 shrink-0" />
+        This printer uses Windows&apos; generic driver, which leaves borderless
+        enlargement to the printer itself, so Hello Print can&apos;t check it.
+        Print a test sheet and measure the 50 mm square. If it prints larger,
+        install the manufacturer&apos;s driver, which usually has a setting to
+        turn enlargement off.
+      </p>
+    );
+  }
+
   if (check.status === "unknown") {
     return (
       <p className="flex items-start gap-1.5 text-xs text-muted-foreground">

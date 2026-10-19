@@ -32,7 +32,11 @@ export interface Preset {
   updated_at: string;
 }
 
-export type ExpansionStatus = "no_expansion_detected" | "expanding" | "unknown";
+export type ExpansionStatus =
+  | "no_expansion_detected"
+  | "expanding"
+  | "unknown"
+  | "printer_decides";
 
 /** Result of checking captured Windows printer settings for borderless expansion. */
 export interface ExpansionCheck {
