@@ -45,6 +45,16 @@ export interface ExpansionCheck {
   paper_mm: [number, number] | null;
 }
 
+/** A named paper size with a reference test sheet (portrait). */
+export interface PaperSize {
+  slug: string;
+  /** Filename keyword that routes to this size, if any */
+  keyword: string | null;
+  label: string;
+  width_mm: number;
+  height_mm: number;
+}
+
 export interface MacOSPrintConfiguration {
   printer_name: string;
   print_info_base64: string;

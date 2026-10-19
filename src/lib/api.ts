@@ -7,6 +7,7 @@ import type {
   PrinterCapabilities,
   PrintJob,
   MacOSPrintConfiguration,
+  PaperSize,
 } from "./types";
 
 // Config
@@ -53,6 +54,12 @@ export const getPlatform = () => invoke<string>("get_platform");
 
 // Opens the app's log folder in the file manager
 export const openLogFolder = () => invoke<void>("open_log_folder");
+
+// Reference test sheets
+export const listPaperSizes = () => invoke<PaperSize[]>("list_paper_sizes");
+
+export const saveTestSheet = (paperSize: string, path: string) =>
+  invoke<void>("save_test_sheet", { paperSize, path });
 
 // Printer dialog (Windows only). Starts from seedDevmodeBase64 when given,
 // otherwise from the printer defaults pre-filled for the paper size.

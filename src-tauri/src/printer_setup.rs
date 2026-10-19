@@ -69,10 +69,9 @@ pub use windows_impl::{check_expansion, open_printer_dialog, print_test_sheet};
 mod windows_impl {
     use super::{classify_expansion, ExpansionCheck};
     use crate::models::Preset;
-    use crate::parser::paper_size_mm;
-    use image::{Rgb, RgbImage};
+    use crate::parser::{find_paper_size, paper_size_mm};
+    use crate::test_sheet;
     use std::os::windows::process::CommandExt;
-    use std::path::Path;
     use std::process::Command;
 
     const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -487,26 +486,25 @@ public static class DeviceGeometry {{
         })
     }
 
-    /// Prints a measurement sheet for the paper size with the given settings:
-    /// a 50 mm outlined square in the centre, a thin frame on the image edge and
-    /// 20 mm outlined corner squares. Lines only, to keep ink use low.
+    /// Prints the reference test sheet (see `crate::test_sheet`) for the paper
+    /// size with the given settings. Lines only, to keep ink use low.
     pub fn print_test_sheet(
         printer_id: &str,
         paper_size_keyword: &str,
         devmode_base64: Option<&str>,
     ) -> Result<(), String> {
-        let (width_mm, height_mm) = paper_size_mm(paper_size_keyword)
+        let size = find_paper_size(paper_size_keyword)
             .ok_or_else(|| format!("Unknown paper size '{}'", paper_size_keyword))?;
 
         let path = std::env::temp_dir().join(format!(
             "helloprint-test-sheet-{}-{}.png",
-            paper_size_keyword.replace(|c: char| !c.is_ascii_alphanumeric() && c != '.', "_"),
+            size.slug,
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_millis()
         ));
-        write_test_sheet(&path, width_mm, height_mm)?;
+        test_sheet::save(&path, size.width_mm, size.height_mm, size.label)?;
 
         let mut preset = Preset::new("Test sheet".to_string(), paper_size_keyword.to_string());
         preset.printer_id = Some(printer_id.to_string());
@@ -515,48 +513,6 @@ public static class DeviceGeometry {{
         let result = crate::watcher::submit_print_windows(&path, printer_id, &preset);
         std::fs::remove_file(&path).ok();
         result
-    }
-
-    /// Whole pixels at 300 dpi.
-    fn px(mm: f64) -> u32 {
-        (mm * 300.0 / 25.4).round() as u32
-    }
-
-    fn write_test_sheet(path: &Path, width_mm: f64, height_mm: f64) -> Result<(), String> {
-        let (w, h) = (px(width_mm), px(height_mm));
-        let mut img = RgbImage::from_pixel(w, h, Rgb([255, 255, 255]));
-        let stroke = px(0.5);
-
-        // Outline drawn inside the box, so outer edge to outer edge is exact.
-        let mut outline = |x: u32, y: u32, size_w: u32, size_h: u32| {
-            for yy in y..(y + size_h).min(h) {
-                for xx in x..(x + size_w).min(w) {
-                    let inside_x = xx >= x + stroke && xx < x + size_w - stroke;
-                    let inside_y = yy >= y + stroke && yy < y + size_h - stroke;
-                    if !(inside_x && inside_y) {
-                        img.put_pixel(xx, yy, Rgb([0, 0, 0]));
-                    }
-                }
-            }
-        };
-
-        outline(0, 0, w, h);
-
-        let corner = px(20.0);
-        for (x, y) in [
-            (0, 0),
-            (w - corner, 0),
-            (0, h - corner),
-            (w - corner, h - corner),
-        ] {
-            outline(x, y, corner, corner);
-        }
-
-        let square = px(50.0);
-        outline((w - square) / 2, (h - square) / 2, square, square);
-
-        img.save(path)
-            .map_err(|e| format!("Failed to write test sheet: {}", e))
     }
 }
 

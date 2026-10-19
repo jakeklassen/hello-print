@@ -446,8 +446,8 @@ export function PresetForm({ preset, onSave, onCancel }: PresetFormProps) {
             </Dialog>
             {testPrintStatus === "sent" && (
               <span className="text-xs text-muted-foreground">
-                Sent. Measure the centre square: it should be exactly 50 &times;
-                50 mm.
+                Sent. The centre square should measure exactly 50 &times; 50 mm,
+                and the blue band should show on every edge.
               </span>
             )}
           </div>
