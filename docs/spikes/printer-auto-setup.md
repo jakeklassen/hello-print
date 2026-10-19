@@ -140,6 +140,7 @@ Not recorded: the 140 mm line, and the exact size of the Auto Expand square (pre
 | Win: Windows forms (`AddForm`) | ⚠️ | ❌ 📄 | ❌ | — | — | — | machine-wide | ❌ admin 📄 | — |
 | Win: import an Epson driver preset | — | — | — | — | — | — | — | — | ❌ no documented import/export 📄 |
 | IPP direct to printer (both OSes) | ❌ no custom ranges 🔎 | ✅ zero-margin 4x6/Letter 🔎 | ❌ no `media-overprint` 🔎; firmware behaviour unprinted | ✅ `rear` 🔎 | ✅ 🔎 | ✅ 🔎 | n/a (per job) | ✅ no | network only |
+| Win: Microsoft IPP Class Driver (ET-8500, WSD queue) | — | ✅ "Borderless printing: On" 🧑 | ❌ the firmware enlarges by a few mm even with "Scaling: None" 🧑 (2026-10-19); the dpi check can't see it, so Hello Print shows ❔ (#38) | — | — | ✅ "Output quality" 🧑 | ✅ per preset | ✅ no | network 🧑 |
 | macOS: Epson driver (`EPIJ_exmg`) | — | ⚠️ 📄 | ⚠️ Min/Mid/Max only; no "retain" documented 📄 | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | not tested |
 | macOS: custom paper size | ✅ 📄 (`PMPaperCreateCustom`) | ❌ prints bordered 📄 | n/a | — | — | — | — | — | not tested |
 
