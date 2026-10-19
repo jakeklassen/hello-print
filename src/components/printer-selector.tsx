@@ -55,6 +55,14 @@ export function PrinterSelector({
                     Default
                   </Badge>
                 )}
+                {p.is_generic_driver && (
+                  <Badge
+                    variant="outline"
+                    className="border-amber-500/50 text-xs text-amber-700 dark:text-amber-400"
+                  >
+                    Generic driver
+                  </Badge>
+                )}
               </span>
             </SelectItem>
           ))}

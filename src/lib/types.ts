@@ -32,7 +32,11 @@ export interface Preset {
   updated_at: string;
 }
 
-export type ExpansionStatus = "no_expansion_detected" | "expanding" | "unknown";
+export type ExpansionStatus =
+  | "no_expansion_detected"
+  | "expanding"
+  | "unknown"
+  | "generic_driver";
 
 /** Result of checking captured Windows printer settings for borderless expansion. */
 export interface ExpansionCheck {
@@ -70,6 +74,8 @@ export interface PrinterInfo {
   driver: string;
   is_default: boolean;
   is_online: boolean;
+  /** On Windows' generic driver instead of the manufacturer's */
+  is_generic_driver: boolean;
 }
 
 export interface PrinterOptionChoice {

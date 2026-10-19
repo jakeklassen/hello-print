@@ -637,6 +637,24 @@ function ExpansionNotice({
     );
   }
 
+  if (check.status === "generic_driver") {
+    return (
+      <div className="space-y-1.5 rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-xs">
+        <p className="flex items-start gap-1.5 font-medium text-amber-700 dark:text-amber-400">
+          <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0" />
+          This printer is using Windows&apos; generic driver, not the
+          manufacturer&apos;s.
+        </p>
+        <p>
+          The generic driver has no setting to stop borderless prints being
+          enlarged, so they may come out a few millimetres too big. Install the
+          driver from the printer manufacturer&apos;s website, then choose that
+          printer here.
+        </p>
+      </div>
+    );
+  }
+
   if (check.status === "unknown") {
     return (
       <p className="flex items-start gap-1.5 text-xs text-muted-foreground">

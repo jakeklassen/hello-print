@@ -19,6 +19,25 @@ pub enum ExpansionStatus {
     /// The driver doesn't report a usable print quality, or the numbers don't
     /// look like expansion; only a test print can tell.
     Unknown,
+    /// The printer is on Windows' generic driver (see
+    /// `printing::is_generic_driver`). It sends true-size pages and has no
+    /// setting to stop the printer's firmware enlarging borderless prints,
+    /// which the check can't see; the manufacturer's driver is needed.
+    GenericDriver,
+}
+
+/// Replaces a "no expansion" result with `GenericDriver` for Windows' generic
+/// drivers, whose dpi always matches because any enlarging happens in the
+/// printer. A measured `Expanding` result stands.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub fn account_for_driver(status: ExpansionStatus, driver_name: Option<&str>) -> ExpansionStatus {
+    if driver_name.is_some_and(crate::printing::is_generic_driver)
+        && status != ExpansionStatus::Expanding
+    {
+        ExpansionStatus::GenericDriver
+    } else {
+        status
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -67,7 +86,7 @@ pub use windows_impl::{check_expansion, open_printer_dialog, print_test_sheet};
 
 #[cfg(target_os = "windows")]
 mod windows_impl {
-    use super::{classify_expansion, ExpansionCheck};
+    use super::{account_for_driver, classify_expansion, ExpansionCheck};
     use crate::models::Preset;
     use crate::parser::{find_paper_size, paper_size_mm};
     use crate::test_sheet;
@@ -461,6 +480,16 @@ public static class DeviceGeometry {{
             (logical_x as i32, None)
         };
         let (status, factor) = classify_expansion(logical_dpi, print_quality_dpi);
+        let driver = printers::get_printer_by_name(printer_id).map(|p| p.driver_name);
+        let status = account_for_driver(status, driver.as_deref());
+        log::info!(
+            "Expansion check: printer={}, driver={:?}, logical={}, quality={:?}, status={:?}",
+            printer_id,
+            driver,
+            logical_dpi,
+            print_quality_dpi,
+            status
+        );
 
         const DM_PAPERLENGTH: i64 = 0x4;
         const DM_PAPERWIDTH: i64 = 0x8;
@@ -553,6 +582,46 @@ mod tests {
         assert_eq!(
             classify_expansion(600, Some(-4)).0,
             ExpansionStatus::Unknown
+        );
+    }
+
+    #[test]
+    fn generic_drivers_are_flagged() {
+        assert_eq!(
+            account_for_driver(
+                ExpansionStatus::NoExpansionDetected,
+                Some("Microsoft IPP Class Driver")
+            ),
+            ExpansionStatus::GenericDriver
+        );
+        assert_eq!(
+            account_for_driver(
+                ExpansionStatus::Unknown,
+                Some("Universal Print Class Driver")
+            ),
+            ExpansionStatus::GenericDriver
+        );
+    }
+
+    #[test]
+    fn vendor_drivers_and_measured_expansion_are_unchanged() {
+        assert_eq!(
+            account_for_driver(
+                ExpansionStatus::NoExpansionDetected,
+                Some("EPSON ET-8500 Series")
+            ),
+            ExpansionStatus::NoExpansionDetected
+        );
+        assert_eq!(
+            account_for_driver(
+                ExpansionStatus::Expanding,
+                Some("Microsoft IPP Class Driver")
+            ),
+            ExpansionStatus::Expanding
+        );
+        assert_eq!(
+            account_for_driver(ExpansionStatus::NoExpansionDetected, None),
+            ExpansionStatus::NoExpansionDetected
         );
     }
 }

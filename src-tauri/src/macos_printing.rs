@@ -153,6 +153,7 @@ pub fn list_printers(app: &AppHandle) -> Result<Vec<PrinterInfo>, String> {
             driver: String::new(),
             is_default: printer.is_default,
             is_online: true,
+            is_generic_driver: false,
         })
         .collect())
 }
