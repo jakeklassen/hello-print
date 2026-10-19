@@ -89,7 +89,7 @@ What this means:
 
 Observed in the driver dialog (2026-10-19): **Document Size → User-Defined → Settings…**.
 
-- **Borderless ticked:** Paper Width becomes a dropdown of **89.0, 101.6, 127.0, 203.2, 210.0 and 215.9 mm** (3.5 / 4 / 5 / 8 in, A4 width, 8.5 in). ⚠️ **Only 215.9 mm could be saved so far**; the other widths are offered but wouldn't save, cause unknown. The rule and table below assume they can be saved, so they are unconfirmed for every width except 215.9. Paper Height is free from **86 to 2000 mm**. A borderless User-Defined size still gets the Auto Expand / Retain Size choice.
+- **Borderless ticked:** Paper Width becomes a dropdown of **89.0, 101.6, 127.0, 203.2, 210.0 and 215.9 mm** (3.5 / 4 / 5 / 8 in, A4 width, 8.5 in). Any of them can be saved. **Click Save first, then OK.** OK stays disabled until the size is saved, so it looks like the size won't save. Paper Height is free from **86 to 2000 mm**. A borderless User-Defined size still gets the Auto Expand / Retain Size choice.
 - **Borderless off:** Paper Width is a free number box and goes much lower, but prints keep the ~3 mm margins.
 
 **Rule:** a custom size can be borderless if **either** edge is one of those widths (feed that edge first) **and** the other edge is 86–2000 mm. Width is the edge across the feed.
