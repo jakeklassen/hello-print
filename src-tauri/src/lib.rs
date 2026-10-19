@@ -6,6 +6,7 @@ mod parser;
 mod printer_setup;
 mod printing;
 mod storage;
+mod test_sheet;
 mod tray;
 mod watcher;
 
@@ -127,6 +128,8 @@ pub fn run() {
             commands::reprint_job,
             commands::get_platform,
             commands::open_log_folder,
+            commands::list_paper_sizes,
+            commands::save_test_sheet,
             commands::open_printer_dialog,
             commands::check_expansion,
             commands::print_test_sheet,

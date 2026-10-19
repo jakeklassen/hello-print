@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { TestSheetCard } from "@/components/test-sheet-card";
 import {
   getConfig,
   saveConfig,
@@ -267,6 +268,9 @@ export function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <TestSheetCard />
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">About</CardTitle>

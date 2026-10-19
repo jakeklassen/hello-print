@@ -6,11 +6,13 @@ use crate::jobs::{JobQueueState, JobStatus, PrintJob};
 #[cfg(target_os = "macos")]
 use crate::macos_printing::{self, MacOSPrintConfiguration};
 use crate::models::{AppConfig, Preset};
+use crate::parser::{find_paper_size, PaperSize, PAPER_SIZES};
 #[cfg(target_os = "windows")]
 use crate::printer_setup;
 use crate::printer_setup::ExpansionCheck;
 use crate::printing::{self, PrinterCapabilities, PrinterInfo};
 use crate::storage::StorageState;
+use crate::test_sheet;
 use crate::watcher::{self, WatcherState, WatcherStatus};
 
 /// Opens the folder holding the app's log files, for sending with a bug report.
@@ -24,6 +26,30 @@ pub fn open_log_folder(app: AppHandle) -> Result<(), String> {
     app.opener()
         .open_path(dir.to_string_lossy(), None::<&str>)
         .map_err(|e| e.to_string())
+}
+
+/// Named paper sizes that have reference test sheets.
+#[tauri::command]
+pub fn list_paper_sizes() -> Vec<PaperSize> {
+    PAPER_SIZES.to_vec()
+}
+
+/// Writes the reference test sheet for a paper size (slug or keyword) as a
+/// PNG, so makers can print it from any app.
+#[tauri::command]
+pub async fn save_test_sheet(paper_size: String, path: String) -> Result<(), String> {
+    let size = find_paper_size(&paper_size)
+        .ok_or_else(|| format!("Unknown paper size '{}'", paper_size))?;
+    tauri::async_runtime::spawn_blocking(move || {
+        test_sheet::save(
+            std::path::Path::new(&path),
+            size.width_mm,
+            size.height_mm,
+            size.label,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

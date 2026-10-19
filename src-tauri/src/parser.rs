@@ -14,29 +14,78 @@ const KEYWORDS: &[(&str, &str)] = &[
     ("a6", "a6"),
 ];
 
-/// Portrait paper dimensions in millimetres for each canonical size.
-const PAPER_SIZES_MM: &[(&str, f64, f64)] = &[
-    ("4x6", 101.6, 152.4),
-    ("5x7", 127.0, 177.8),
-    ("8x10", 203.2, 254.0),
-    ("8.5x11", 215.9, 279.4),
-    ("a4", 210.0, 297.0),
-    ("a5", 148.0, 210.0),
-    ("a6", 105.0, 148.0),
+/// A named paper size, portrait.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
+pub struct PaperSize {
+    /// Stable, filename-safe name (e.g. "letter", "4x6").
+    pub slug: &'static str,
+    /// Canonical filename keyword, if files can be routed by this size.
+    pub keyword: Option<&'static str>,
+    pub label: &'static str,
+    pub width_mm: f64,
+    pub height_mm: f64,
+}
+
+const fn size(
+    slug: &'static str,
+    keyword: Option<&'static str>,
+    label: &'static str,
+    width_mm: f64,
+    height_mm: f64,
+) -> PaperSize {
+    PaperSize {
+        slug,
+        keyword,
+        label,
+        width_mm,
+        height_mm,
+    }
+}
+
+/// Named paper sizes. Legal and Half Letter have no filename keyword yet but
+/// are common enough to have test sheets.
+pub const PAPER_SIZES: &[PaperSize] = &[
+    size("4x6", Some("4x6"), "4 x 6 in", 101.6, 152.4),
+    size("5x7", Some("5x7"), "5 x 7 in", 127.0, 177.8),
+    size("8x10", Some("8x10"), "8 x 10 in", 203.2, 254.0),
+    size(
+        "letter",
+        Some("8.5x11"),
+        "Letter (8.5 x 11 in)",
+        215.9,
+        279.4,
+    ),
+    size("legal", None, "Legal (8.5 x 14 in)", 215.9, 355.6),
+    size(
+        "half-letter",
+        None,
+        "Half Letter (5.5 x 8.5 in)",
+        139.7,
+        215.9,
+    ),
+    size("a4", Some("a4"), "A4", 210.0, 297.0),
+    size("a5", Some("a5"), "A5", 148.0, 210.0),
+    size("a6", Some("a6"), "A6", 105.0, 148.0),
 ];
 
-/// Portrait (width, height) in millimetres for a preset's paper size keyword,
-/// accepting aliases (e.g. "letter", "4R"). Returns None for unknown keywords.
-pub fn paper_size_mm(keyword: &str) -> Option<(f64, f64)> {
-    let lower = keyword.trim().to_lowercase();
+/// Finds a paper size by slug or by filename keyword, accepting aliases
+/// (e.g. "letter", "4R"). Case-insensitive.
+pub fn find_paper_size(name: &str) -> Option<&'static PaperSize> {
+    let lower = name.trim().to_lowercase();
+    if let Some(size) = PAPER_SIZES.iter().find(|s| s.slug == lower) {
+        return Some(size);
+    }
     let canonical = KEYWORDS
         .iter()
         .find(|(k, _)| *k == lower)
         .map(|(_, c)| *c)?;
-    PAPER_SIZES_MM
-        .iter()
-        .find(|(name, _, _)| *name == canonical)
-        .map(|(_, w, h)| (*w, *h))
+    PAPER_SIZES.iter().find(|s| s.keyword == Some(canonical))
+}
+
+/// Portrait (width, height) in millimetres for a preset's paper size keyword,
+/// accepting aliases (e.g. "letter", "4R"). Returns None for unknown keywords.
+pub fn paper_size_mm(keyword: &str) -> Option<(f64, f64)> {
+    find_paper_size(keyword).map(|s| (s.width_mm, s.height_mm))
 }
 
 /// Delimiter characters that separate tokens in filenames.
@@ -152,6 +201,26 @@ mod tests {
         assert_eq!(paper_size_mm("8.5x11"), Some((215.9, 279.4)));
         assert_eq!(paper_size_mm("A6"), Some((105.0, 148.0)));
         assert_eq!(paper_size_mm("poster"), None);
+    }
+
+    #[test]
+    fn test_find_paper_size() {
+        assert_eq!(find_paper_size("Legal").unwrap().height_mm, 355.6);
+        assert_eq!(find_paper_size("half-letter").unwrap().width_mm, 139.7);
+        assert_eq!(find_paper_size("4R").unwrap().slug, "4x6");
+        assert_eq!(find_paper_size("letter").unwrap().slug, "letter");
+        assert_eq!(find_paper_size("8.5x11").unwrap().slug, "letter");
+        assert!(find_paper_size("custom").is_none());
+    }
+
+    #[test]
+    fn every_keyword_has_a_paper_size() {
+        for (_, canonical) in KEYWORDS {
+            assert!(
+                PAPER_SIZES.iter().any(|s| s.keyword == Some(*canonical)),
+                "{canonical} has no paper size"
+            );
+        }
     }
 
     #[test]
