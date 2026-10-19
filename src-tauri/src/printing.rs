@@ -53,11 +53,35 @@ pub fn discover_printers() -> Vec<PrinterInfo> {
     }
 }
 
+/// The Windows default printer's name. Not `printers::get_default_printer()`:
+/// printers 2.3.0 compares only the first character of the names, so any
+/// printer sharing the default's first letter could be reported as default.
+#[cfg(target_os = "windows")]
+fn default_printer_name_windows() -> Option<String> {
+    #[link(name = "winspool")]
+    extern "system" {
+        fn GetDefaultPrinterW(buffer: *mut u16, size: *mut u32) -> i32;
+    }
+
+    let mut size: u32 = 0;
+    unsafe {
+        GetDefaultPrinterW(std::ptr::null_mut(), &mut size);
+    }
+    if size == 0 {
+        return None;
+    }
+    let mut buffer = vec![0u16; size as usize];
+    if unsafe { GetDefaultPrinterW(buffer.as_mut_ptr(), &mut size) } == 0 {
+        return None;
+    }
+    let len = buffer.iter().position(|&c| c == 0).unwrap_or(buffer.len());
+    Some(String::from_utf16_lossy(&buffer[..len]))
+}
+
 #[cfg(target_os = "windows")]
 fn discover_printers_windows() -> Vec<PrinterInfo> {
     let system_printers = printers::get_printers();
-    let default_printer = printers::get_default_printer();
-    let default_name = default_printer.as_ref().map(|p| p.name.clone());
+    let default_name = default_printer_name_windows();
 
     system_printers
         .into_iter()
@@ -807,4 +831,22 @@ fn split_kebab_case(s: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod windows_tests {
+    use super::*;
+
+    /// The default printer's name must match one printer exactly (no stray
+    /// nulls), and only that printer is flagged as default.
+    #[test]
+    fn exactly_one_printer_is_default() {
+        let Some(default_name) = default_printer_name_windows() else {
+            return; // no default printer on this machine
+        };
+        let printers = discover_printers_windows();
+        let defaults: Vec<_> = printers.iter().filter(|p| p.is_default).collect();
+        assert_eq!(defaults.len(), 1, "{printers:?}");
+        assert_eq!(defaults[0].name, default_name);
+    }
 }
