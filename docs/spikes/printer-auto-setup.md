@@ -206,6 +206,7 @@ No model registry: nothing is keyed by driver name or version.
 5. **Hairline slivers** with Retain Size near the paper edge. Epson documents this; the owner's prints didn't show it.
 6. **The 2-byte field at offset 2304** is unexplained. It is harmless in every test.
 7. **macOS not done.**
+8. **AirPrint on macOS is the Mac version of Windows' generic driver.** The owner recalls that without Epson's driver installed, the Mac used AirPrint, which has no Expansion setting. macOS's Add Printer also tends to default "Use:" to AirPrint. The macOS pass needs to add an AirPrint queue alongside an Epson-driver queue and find a reliable way to tell them apart (likely the queue's printer description file: AirPrint marker vs Epson `EPIJ_` options). Hello Print should then show the same "Generic driver" badge and warning as on Windows (#38).
 
 ## 9. Prototype code
 
