@@ -8,6 +8,22 @@ pub struct PrinterInfo {
     pub driver: String,
     pub is_default: bool,
     pub is_online: bool,
+    /// On Windows' generic driver instead of the manufacturer's; see
+    /// `is_generic_driver`.
+    #[serde(default)]
+    pub is_generic_driver: bool,
+}
+
+/// Windows' generic drivers, which Windows 11 prefers for newly added printers
+/// since July 2026. They have no setting to stop a printer enlarging
+/// borderless prints (Epson Retain Size and the like live in the
+/// manufacturer's driver), so true-size borderless needs that driver.
+const GENERIC_DRIVERS: &[&str] = &["Microsoft IPP Class Driver", "Universal Print Class Driver"];
+
+pub fn is_generic_driver(driver_name: &str) -> bool {
+    GENERIC_DRIVERS
+        .iter()
+        .any(|d| d.eq_ignore_ascii_case(driver_name.trim()))
 }
 
 /// A single printer option (e.g. "PageSize", "MediaType", "InputSlot").
@@ -90,6 +106,7 @@ fn discover_printers_windows() -> Vec<PrinterInfo> {
             PrinterInfo {
                 id: p.name.clone(),
                 name: p.name.clone(),
+                is_generic_driver: is_generic_driver(&p.driver_name),
                 driver: p.driver_name,
                 is_default,
                 is_online: true,
@@ -140,6 +157,7 @@ fn discover_printers_cups() -> Vec<PrinterInfo> {
                             driver: String::new(),
                             is_default,
                             is_online,
+                            is_generic_driver: false,
                         });
                     }
                 }
@@ -160,6 +178,7 @@ fn discover_printers_cups() -> Vec<PrinterInfo> {
                 PrinterInfo {
                     id: p.name.clone(),
                     name: p.name.clone(),
+                    is_generic_driver: is_generic_driver(&p.driver_name),
                     driver: p.driver_name,
                     is_default,
                     is_online: true,

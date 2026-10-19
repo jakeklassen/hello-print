@@ -19,29 +19,22 @@ pub enum ExpansionStatus {
     /// The driver doesn't report a usable print quality, or the numbers don't
     /// look like expansion; only a test print can tell.
     Unknown,
-    /// A Windows class driver that sends true-size pages and leaves borderless
-    /// enlargement to the printer's firmware, which the check can't see. Only a
-    /// test print can tell.
-    PrinterDecides,
+    /// The printer is on Windows' generic driver (see
+    /// `printing::is_generic_driver`). It sends true-size pages and has no
+    /// setting to stop the printer's firmware enlarging borderless prints,
+    /// which the check can't see; the manufacturer's driver is needed.
+    GenericDriver,
 }
 
-/// Microsoft class drivers that hand borderless to the printer (IPP
-/// `media-col` with zero margins) rather than enlarging the page themselves.
-const PRINTER_SIDE_BORDERLESS_DRIVERS: &[&str] =
-    &["Microsoft IPP Class Driver", "Universal Print Class Driver"];
-
-/// Downgrades a "no expansion" result to `PrinterDecides` for class drivers,
-/// whose dpi always matches because the enlarging, if any, happens in the
-/// printer. An `Expanding` result stands.
+/// Replaces a "no expansion" result with `GenericDriver` for Windows' generic
+/// drivers, whose dpi always matches because any enlarging happens in the
+/// printer. A measured `Expanding` result stands.
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub fn account_for_driver(status: ExpansionStatus, driver_name: Option<&str>) -> ExpansionStatus {
-    let printer_side = driver_name.is_some_and(|name| {
-        PRINTER_SIDE_BORDERLESS_DRIVERS
-            .iter()
-            .any(|d| d.eq_ignore_ascii_case(name.trim()))
-    });
-    if printer_side && status != ExpansionStatus::Expanding {
-        ExpansionStatus::PrinterDecides
+    if driver_name.is_some_and(crate::printing::is_generic_driver)
+        && status != ExpansionStatus::Expanding
+    {
+        ExpansionStatus::GenericDriver
     } else {
         status
     }
@@ -593,20 +586,20 @@ mod tests {
     }
 
     #[test]
-    fn ipp_class_driver_leaves_it_to_the_printer() {
+    fn generic_drivers_are_flagged() {
         assert_eq!(
             account_for_driver(
                 ExpansionStatus::NoExpansionDetected,
                 Some("Microsoft IPP Class Driver")
             ),
-            ExpansionStatus::PrinterDecides
+            ExpansionStatus::GenericDriver
         );
         assert_eq!(
             account_for_driver(
                 ExpansionStatus::Unknown,
                 Some("Universal Print Class Driver")
             ),
-            ExpansionStatus::PrinterDecides
+            ExpansionStatus::GenericDriver
         );
     }
 
