@@ -43,3 +43,6 @@ flate2 = "1"
 tauri-plugin-log = "2.10.1"
 log = "0.4"
 ab_glyph = "0.2.32"
+
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+tauri-plugin-single-instance = "2.5.4"

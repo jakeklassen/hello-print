@@ -20,7 +20,24 @@ use watcher::WatcherState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+
+    // One instance only: a second copy would start its own folder watcher and
+    // print every file twice. Launching again brings the running window back
+    // instead (it may be hidden in the tray). Must be the first plugin.
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            log::info!("Second launch; showing the running instance");
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }));
+    }
+
+    builder
         // Logs go to the app log dir (on Windows
         // %LOCALAPPDATA%\studio.hellomagnets.hello-print\logs) so testers can
         // send them; Settings has a button that opens the folder.
