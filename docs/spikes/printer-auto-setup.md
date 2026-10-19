@@ -17,7 +17,7 @@ Evidence labels used throughout:
 
 - A custom size prints true size because **it isn't borderless**. The printer keeps its normal ~3 mm hardware margins, so it never needs to overspray, so it never enlarges anything.
 - Nothing from Epson, Canon, HP, Microsoft or Apple describes custom sizes as a fix for expansion. 📄
-- **Epson, Windows:** a User-Defined size can only be borderless at standard borderless widths. When it is borderless, it gets the same Auto Expand / Retain Size choice as any other size. 📄 ([ET-8500/8550 User's Guide p.295](https://files.support.epson.com/docid/cpd5/cpd59879/helpcontents.html), [Epson FAQ KA-01554](https://epson.co.uk/faq/KA-01554/contents?loc=en-us), [Epson Pro FAQ](https://epson.com/faq/SPT_C593001PRO~faq-68086))
+- **Epson, Windows:** a User-Defined size can only be borderless at standard borderless widths. When it is borderless, it gets the same Auto Expand / Retain Size choice as any other size. On the ET-8500 the widths are 89.0, 101.6, 127.0, 203.2, 210.0 and 215.9 mm 🧑. See [Custom sizes on the ET-8500](#custom-sizes-on-the-et-8500-windows) 📄 ([ET-8500/8550 User's Guide p.295](https://files.support.epson.com/docid/cpd5/cpd59879/helpcontents.html), [Epson FAQ KA-01554](https://epson.co.uk/faq/KA-01554/contents?loc=en-us), [Epson Pro FAQ](https://epson.com/faq/SPT_C593001PRO~faq-68086))
 - **macOS / CUPS:**
   - CUPS gives custom sizes the printer's *largest* hardware margins (`*HWMargins`), so the job reaches the printer as a bordered job. 📄 ([cups/ppd-cache.c](https://github.com/OpenPrinting/cups/blob/master/cups/ppd-cache.c))
   - An ET-8550 user reports that a zero-margin custom size "still prints with a border". 📄 ([Adobe community](https://community.adobe.com/questions-675/borderless-printing-missing-on-mac-os-15-2-980352))
@@ -85,6 +85,36 @@ What this means:
 
 `watcher.rs` draws the image at `(0, 0)` with the paper's size. With Retain Size, `(0, 0)` is the corner of the larger page, not of the sheet. The fix is to draw at `((physical − paper) / 2 − physicalOffset)` on each axis, which works out to +2.68 / +1.41 mm here. That is a no-op whenever the page equals the sheet.
 
+### Custom sizes on the ET-8500 (Windows) 🧑
+
+Observed in the driver dialog (2026-10-19): **Document Size → User-Defined → Settings…**.
+
+- **Borderless ticked:** Paper Width becomes a dropdown of **89.0, 101.6, 127.0, 203.2, 210.0 and 215.9 mm** (3.5 / 4 / 5 / 8 in, A4 width, 8.5 in). Paper Height is free from **86 to 2000 mm**. A borderless User-Defined size still gets the Auto Expand / Retain Size choice.
+- **Borderless off:** Paper Width is a free number box and goes much lower, but prints keep the ~3 mm margins.
+
+**Rule:** a custom size can be borderless if **either** edge is one of those widths (feed that edge first) **and** the other edge is 86–2000 mm. Width is the edge across the feed.
+
+Applied to the custom sizes Makers use on the platform (as of 2026-10-19):
+
+| Size (mm) | What it is | Templates | Borderless on the ET-8500? |
+|---|---|---|---|
+| 107.95 × 279.4 | 4.25 × 11 in, Letter cut lengthwise | 9 | ❌ neither edge is a borderless width, so it prints bordered. To go edge to edge, print two-up on Letter and cut. |
+| 139.7 × 215.9 | Half Letter | 4 | ✅ feed the 215.9 edge first (width 215.9, height 139.7) |
+| 107.95 × 91.44 | 4.25 × 3.6 in | 1 | ❌ bordered |
+| 80.01 × 80.01 | 80 mm square | 1 | ❌ no borderless width, and 80 mm is under the 86 mm minimum height |
+| 148.5 × 210 | half A4 (A5 is 148 × 210) | 1 | ✅ feed the 210 edge first (width 210, height 148.5) |
+| 215.9 × 355.6 | Legal | 1 | ✅ as is |
+| 279.4 × 215.9 | Letter, landscape | 1 | ✅ it's Letter: feed portrait and rotate the design |
+
+**How Hello Print would support a custom size** (for when Makers ask; not built):
+
+1. **Test sheet:** the generator (`src-tauri/src/test_sheet.rs`) already renders any width × height. Pages under 100 mm get a 25 mm centre square. Only a width/height input in Settings → Test Sheets is missing.
+2. **Setup:** no new driver code. In the guided dialog the Maker creates a User-Defined (Borderless) size and picks Retain Size. The expansion check and test sheet verify it as for any other size. Optionally, pre-fill the size through Print Ticket `psk:CustomMediaSize`, which the driver exposes.
+3. **Routing:** the filename has to carry the size (e.g. `4.25x11` or `108x279mm`), so the platform must emit it, and presets need to store custom dimensions. This is the "CustomKeyword (V2)" in CLAUDE.md.
+4. **Orientation:** when the size is borderless only rotated (Half Letter, half A4), the image has to be rotated to match the feed edge. Hello Print would do that from the preset's dimensions.
+
+Other printers have their own width lists. Their dialogs enforce them the same way, and the test sheet shows the result.
+
 ## 4. Test prints
 
 All on 4x6 Presentation Paper Matte, rear feeder, network queue. Sheets come from `spikes/printer-auto-setup/test-sheets/make-4x6-sheets.ps1`: 300 dpi, whole-pixel dimensions, thin outlines.
@@ -104,7 +134,7 @@ Not recorded: the 140 mm line, and the exact size of the Auto Expand square (pre
 
 | Route | Custom size | Borderless | Expansion off | Tray | Paper type | Quality | Persists | Needs admin | Network / USB |
 |---|---|---|---|---|---|---|---|---|---|
-| **Win: named settings + Retain Size byte (ET-8500)** | ⚠️ exposed 🔎, but not borderless 📄 | ✅ 🧑 | ✅ 🧑 | ✅ 🔎 | ✅ 🔎 | ✅ 🔎 | ✅ the stored blob is re-verified each time 🔎 | ✅ no | ✅ network 🧑 / ⚠️ USB untested |
+| **Win: named settings + Retain Size byte (ET-8500)** | ✅ borderless when one edge is 89 / 101.6 / 127 / 203.2 / 210 / 215.9 mm and the other is 86–2000 mm 🧑; otherwise bordered | ✅ 🧑 | ✅ 🧑 | ✅ 🔎 | ✅ 🔎 | ✅ 🔎 | ✅ the stored blob is re-verified each time 🔎 | ✅ no | ✅ network 🧑 / ⚠️ USB untested |
 | Win: named settings, other printers | ⚠️ driver-dependent | ✅ 🔎 (standard feature) | ❌ needs the driver dialog | ✅ 🔎 | ✅ 🔎 | ✅ 🔎 | ✅ | ✅ no | ⚠️ untested |
 | Win: shipped known-good blob per model | — | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ the driver accepted it on a 2nd queue unchanged 🔎; other PCs/versions unknown | ✅ no | ⚠️ |
 | Win: Windows forms (`AddForm`) | ⚠️ | ❌ 📄 | ❌ | — | — | — | machine-wide | ❌ admin 📄 | — |
@@ -192,5 +222,5 @@ Captured blobs and dumps stay in `tmp/spike/` (gitignored). They come from the o
 
 ## 10. Spike housekeeping
 
-- A test queue, **"HelloPrint Spike ET-8500"**, was added for the same printer (same driver and port). Delete it when the spike ends: `Remove-Printer -Name "HelloPrint Spike ET-8500"`.
+- A test queue, **"HelloPrint Spike ET-8500"**, was added for the same printer (same driver and port). It was removed on 2026-10-17, and the default printer was restored to `ET-8500 Series(Network)`.
 - The owner's queue `ET-8500 Series(Network)`, its defaults and the Epson presets were only ever read. The default printer is unchanged.
