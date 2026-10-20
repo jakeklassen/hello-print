@@ -26,20 +26,6 @@ pub enum ExpansionStatus {
     GenericDriver,
 }
 
-/// Replaces a "no expansion" result with `GenericDriver` for Windows' generic
-/// drivers, whose dpi always matches because any enlarging happens in the
-/// printer. A measured `Expanding` result stands.
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub fn account_for_driver(status: ExpansionStatus, driver_name: Option<&str>) -> ExpansionStatus {
-    if driver_name.is_some_and(crate::printing::is_generic_driver)
-        && status != ExpansionStatus::Expanding
-    {
-        ExpansionStatus::GenericDriver
-    } else {
-        status
-    }
-}
-
 #[derive(Debug, Clone, Serialize)]
 pub struct ExpansionCheck {
     pub status: ExpansionStatus,
@@ -86,7 +72,7 @@ pub use windows_impl::{check_expansion, open_printer_dialog, print_test_sheet};
 
 #[cfg(target_os = "windows")]
 mod windows_impl {
-    use super::{account_for_driver, classify_expansion, ExpansionCheck};
+    use super::{classify_expansion, ExpansionCheck, ExpansionStatus};
     use crate::models::Preset;
     use crate::parser::{find_paper_size, paper_size_mm};
     use crate::test_sheet;
@@ -397,6 +383,30 @@ try {{
         printer_id: &str,
         devmode_base64: &str,
     ) -> Result<ExpansionCheck, String> {
+        // The generic driver always reports a true-size page (any enlarging
+        // happens in the printer), so the check can't tell us anything. It
+        // also has to ask the printer over the network, which pops up
+        // Windows' "Waiting for printer connection..." box, so skip it.
+        let driver = printers::get_printer_by_name(printer_id).map(|p| p.driver_name);
+        if driver
+            .as_deref()
+            .is_some_and(crate::printing::is_generic_driver)
+        {
+            log::info!(
+                "Expansion check skipped: printer={}, driver={:?} is generic",
+                printer_id,
+                driver
+            );
+            return Ok(ExpansionCheck {
+                status: ExpansionStatus::GenericDriver,
+                logical_dpi: 0,
+                print_quality_dpi: None,
+                factor: None,
+                page_mm: None,
+                paper_mm: None,
+            });
+        }
+
         let script = format!(
             r#"$ErrorActionPreference = 'Stop'
 try {{
@@ -480,8 +490,6 @@ public static class DeviceGeometry {{
             (logical_x as i32, None)
         };
         let (status, factor) = classify_expansion(logical_dpi, print_quality_dpi);
-        let driver = printers::get_printer_by_name(printer_id).map(|p| p.driver_name);
-        let status = account_for_driver(status, driver.as_deref());
         log::info!(
             "Expansion check: printer={}, driver={:?}, logical={}, quality={:?}, status={:?}",
             printer_id,
@@ -582,46 +590,6 @@ mod tests {
         assert_eq!(
             classify_expansion(600, Some(-4)).0,
             ExpansionStatus::Unknown
-        );
-    }
-
-    #[test]
-    fn generic_drivers_are_flagged() {
-        assert_eq!(
-            account_for_driver(
-                ExpansionStatus::NoExpansionDetected,
-                Some("Microsoft IPP Class Driver")
-            ),
-            ExpansionStatus::GenericDriver
-        );
-        assert_eq!(
-            account_for_driver(
-                ExpansionStatus::Unknown,
-                Some("Universal Print Class Driver")
-            ),
-            ExpansionStatus::GenericDriver
-        );
-    }
-
-    #[test]
-    fn vendor_drivers_and_measured_expansion_are_unchanged() {
-        assert_eq!(
-            account_for_driver(
-                ExpansionStatus::NoExpansionDetected,
-                Some("EPSON ET-8500 Series")
-            ),
-            ExpansionStatus::NoExpansionDetected
-        );
-        assert_eq!(
-            account_for_driver(
-                ExpansionStatus::Expanding,
-                Some("Microsoft IPP Class Driver")
-            ),
-            ExpansionStatus::Expanding
-        );
-        assert_eq!(
-            account_for_driver(ExpansionStatus::NoExpansionDetected, None),
-            ExpansionStatus::NoExpansionDetected
         );
     }
 }

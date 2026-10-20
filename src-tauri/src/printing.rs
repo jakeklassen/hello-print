@@ -869,3 +869,16 @@ mod windows_tests {
         assert_eq!(defaults[0].name, default_name);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::is_generic_driver;
+
+    #[test]
+    fn generic_drivers_are_recognised() {
+        assert!(is_generic_driver("Microsoft IPP Class Driver"));
+        assert!(is_generic_driver(" universal print class driver "));
+        assert!(!is_generic_driver("EPSON ET-8500 Series"));
+        assert!(!is_generic_driver(""));
+    }
+}
